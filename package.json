@@ -1,0 +1,10 @@
+{
+  "name": "prancheta-8bit",
+  "version": "1.0.0",
+  "description": "Jogo de técnico de futebol em estilo 8-bit — Séries A, B, C e D do Brasil",
+  "private": true,
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node test/sim.test.js"
+  }
+}
