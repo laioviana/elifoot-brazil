@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /* Atualiza js/roster.js com elencos reais.
  *
- *   [FOOTBALL_DATA_TOKEN=xxxx] node scripts/update-roster.js [--dry]   (padrão: --source auto)
- *     auto = Wikidata (todas as divisões) + football-data.org (Série A, se houver token grátis)
+ *   FOOTBALL_DATA_TOKEN=xxxx node scripts/update-roster.js [--dry]     (padrão: --source auto)
+ *     auto = Série A pela football-data.org (grátis, elencos atuais)
+ *     --with-wikidata [--recent-years N] = tenta preencher Séries B-D pela Wikidata (dados duvidosos)
  *   node scripts/update-roster.js --source wikidata [--dry]
  *   API_FOOTBALL_KEY=xxxx node scripts/update-roster.js --source apifootball [--season 2026] [--dry]
  *
@@ -165,8 +166,9 @@ async function buildWikidata(query, now = new Date(), log = console.log, { recen
     m.set(id, e);
   }
   // vínculos sem data de fim e com início antigo quase sempre são ex-jogadores: só vale quem entrou recentemente
-  const cutoff = new Date(now.getTime() - recentYears * 365.25 * 864e5).toISOString();
-  const size = id => [...(byClub.get(id) || new Map()).values()].filter(e => e.start && e.start >= cutoff).length;
+  const cutoff = recentYears > 0 ? new Date(now.getTime() - recentYears * 365.25 * 864e5).toISOString() : null;
+  const isRecent = e => !cutoff || (e.start && e.start >= cutoff);
+  const size = id => [...(byClub.get(id) || new Map()).values()].filter(isRecent).length;
   const ranked = new Map([...cand].map(([name, list]) => [name, list.slice().sort((x, y) => size(y.id) - size(x.id))]));
   // cada clube da Wikidata serve a um só clube do jogo; em conflito vence o rótulo mais justo ao nome
   const banned = new Map([...ranked.keys()].map(k => [k, new Set()]));
@@ -187,12 +189,12 @@ async function buildWikidata(query, now = new Date(), log = console.log, { recen
     const best = avail[0];
     if (!best) { missing.push(name); log(`  ! ${name}: nenhum clube correspondente na Wikidata`); continue; }
     const n = size(best.id);
-    if (n < MIN_REAL) { missing.push(name); log(`  ! ${name}: só ${n} jogadores recentes (últimos ${recentYears} anos) na Wikidata (${best.id})`); continue; }
+    if (n < MIN_REAL) { missing.push(name); log(`  ! ${name}: só ${n} jogadores${cutoff ? ` com início nos últimos ${recentYears} anos` : ''} na Wikidata (${best.id})`); continue; }
     if (avail[1] && size(avail[1].id) >= n / 2) log(`  ? ${name}: ambíguo entre ${best.id} (${n}) e ${avail[1].id} (${size(avail[1].id)}); usando o primeiro`);
     // a Wikidata raramente encerra vínculos antigos: fica quem entrou mais recentemente (sem data = mais antigo)
     const list2 = [...byClub.get(best.id).values()].filter(e => e.label)
       .map(e => ({ ...e, age: e.dob ? ageOf(e.dob, now) : 25 })).filter(e => e.age <= 40)
-      .filter(e => e.start && e.start >= cutoff)
+      .filter(isRecent)
       .sort((a, b) => (b.start || '').localeCompare(a.start || '')).slice(0, MAX_REAL);
     if (n > MAX_REAL) log(`  i ${name}: ${n} vínculos recentes; mantidos os ${list2.length} mais novos`);
     let rr = 0; const fill = ['D', 'M', 'A'];
@@ -257,11 +259,6 @@ async function main() {
       }
     }
   };
-  const wikidata = () => buildWikidata(q => http('Wikidata', SPARQL, {
-    method: 'POST',
-    headers: { Accept: 'application/sparql-results+json', 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
-    body: 'format=json&query=' + encodeURIComponent(q)
-  }));
   const footballData = () => buildFootballData(p => http('football-data.org', FD_API + p, {
     headers: { 'X-Auth-Token': process.env.FOOTBALL_DATA_TOKEN, 'User-Agent': UA }
   }));
@@ -276,18 +273,24 @@ async function main() {
     }, Number(opt('--season', new Date().getFullYear())));
   };
 
+  const years = Number(opt('--recent-years', 4)); // 0 = não filtrar por data de início (arriscado: traz ex-jogadores)
+  const wikidata = () => buildWikidata(q => http('Wikidata', SPARQL, {
+    method: 'POST',
+    headers: { Accept: 'application/sparql-results+json', 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
+    body: 'format=json&query=' + encodeURIComponent(q)
+  }), new Date(), console.log, { recentYears: years });
   let res, minClubs = 20;
   if (source === 'wikidata') res = await wikidata();
   else if (source === 'apifootball') { res = await apiFootball(); minClubs = 40; }
   else if (source === 'auto') {
-    // Wikidata para tudo; football-data.org (se houver token) sobrescreve a Série A com dados mais confiáveis.
-    res = await wikidata();
-    if (process.env.FOOTBALL_DATA_TOKEN) {
-      const fd = await footballData();
-      console.log(`football-data.org: ${Object.keys(fd.roster).length} clubes da Série A`);
-      Object.assign(res.roster, fd.roster);
-      res.missing = res.missing.filter(n => !res.roster[n]);
-    } else console.log('FOOTBALL_DATA_TOKEN não definido: Série A virá só da Wikidata.');
+    // Série A: football-data.org (elencos atuais). Séries B-D: só com --with-wikidata, pois a Wikidata
+    // raramente tem datas de início/fim e mistura ex-jogadores; sem isso ficam os nomes gerados.
+    if (!process.env.FOOTBALL_DATA_TOKEN) { console.error('Defina FOOTBALL_DATA_TOKEN (grátis em football-data.org/client/register).'); process.exit(1); }
+    res = await footballData();
+    if (args.includes('--with-wikidata')) {
+      const wd = await wikidata();
+      res = { roster: { ...wd.roster, ...res.roster }, missing: wd.missing.filter(n => !res.roster[n]) };
+    } else res.missing = D.CLUBS.flat().map(c => c[0]).filter(n => !res.roster[n]);
   } else { console.error('--source: auto | wikidata | apifootball'); process.exit(1); }
 
   const { roster, missing } = res;

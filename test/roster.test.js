@@ -84,6 +84,8 @@ const fdGet = async () => ({ teams: [
   const st = await U.buildWikidata(staleQ, new Date('2026-06-15'), () => {}, { recentYears: 30 });
   assert.strictEqual(st.roster.Bahia.length, 30);
   const st4 = await U.buildWikidata(staleQ, new Date('2026-06-15'), () => {}); // padrão: 4 anos
+  const st0 = await U.buildWikidata(staleQ, new Date('2026-06-15'), () => {}, { recentYears: 0 }); // sem filtro de data
+  assert.strictEqual(st0.roster.Bahia.length, 30);
   assert(!st4.roster.Bahia && st4.missing.includes('Bahia'));  // vínculos de 2000-2024 são considerados velhos
   assert(!st.roster.Bahia.some(p => p[2] > 40));
 
