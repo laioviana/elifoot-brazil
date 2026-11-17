@@ -91,7 +91,7 @@ const fdGet = async () => ({ teams: [
   const dupQ = async q => q.includes('GROUP BY')
     ? { results: { bindings: [wdBind({ club: Q('Q7'), label: 'Amazonas Futebol Clube', alts: 'Manaus', iso: 'BR-AM' })] } }
     : { results: { bindings: stale('Q7', 20) } };
-  const dup = await U.buildWikidata(dupQ, new Date('2026-06-15'), () => {});
+  const dup = await U.buildWikidata(dupQ, new Date('2026-06-15'), () => {}, { recentYears: 30 });
   assert(dup.roster.Amazonas && !dup.roster.Manaus && dup.missing.includes('Manaus'));
   const { roster, missing } = await U.build(get, 2026, () => {});
   assert.deepStrictEqual(Object.keys(roster).sort(), ['Bragantino', 'Ceará', 'Flamengo', 'Tombense']);
