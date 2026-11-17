@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /* Atualiza js/roster.js com elencos reais.
  *
- *   node scripts/update-roster.js [--source wikidata] [--dry]        (padrão; grátis, sem chave)
+ *   [FOOTBALL_DATA_TOKEN=xxxx] node scripts/update-roster.js [--dry]   (padrão: --source auto)
+ *     auto = Wikidata (todas as divisões) + football-data.org (Série A, se houver token grátis)
+ *   node scripts/update-roster.js --source wikidata [--dry]
  *   API_FOOTBALL_KEY=xxxx node scripts/update-roster.js --source apifootball [--season 2026] [--dry]
  *
  * Wikidata: 2 consultas SPARQL (clubes e jogadores atuais). Boa cobertura na Série A/B, irregular na C/D.
@@ -83,9 +85,9 @@ const playersQuery = ids => `SELECT ?club ?p ?pt ?en ?nick ?dob ?posl ?start WHE
 const wdPos = l => {
   l = (l || '').toLowerCase();
   if (/goalkeeper/.test(l)) return 'G';
-  if (/back|defender|sweeper/.test(l)) return 'D';
+  if (/back|defen[cs]e|sweeper/.test(l)) return 'D';
   if (/midfield|playmaker/.test(l)) return 'M';
-  if (/forward|striker|winger|attacker/.test(l)) return 'A';
+  if (/forward|striker|winger|attack|offence/.test(l)) return 'A';
   return null;
 };
 const MAX_REAL = 30; // elenco máximo importado por clube
@@ -195,6 +197,22 @@ async function buildWikidata(query, now = new Date(), log = console.log) {
   return { roster, missing };
 }
 
+/* ---------- football-data.org (plano grátis: Série A) ---------- */
+const FD_API = 'https://api.football-data.org/v4';
+async function buildFootballData(get, now = new Date(), log = console.log) {
+  const match = matcher(), roster = {};
+  const teams = ((await get('/competitions/BSA/teams')).teams) || [];
+  for (const t of teams) {
+    const club = [t.shortName, t.name, t.tla].map(x => x && match(x)).find(Boolean);
+    if (!club) { log(`  ? football-data: sem correspondência para ${t.name}`); continue; }
+    const squad = (t.squad || []).filter(x => x.name && wdPos(x.position))
+      .map(x => [gameName(x.name, ''), wdPos(x.position), x.dateOfBirth ? ageOf(x.dateOfBirth, now) : 25]);
+    if (squad.length < MIN_REAL) { log(`  ! football-data: ${club.name} veio com ${squad.length} jogadores`); continue; }
+    roster[club.name] = squad.sort((a, b) => 'GDMA'.indexOf(a[1]) - 'GDMA'.indexOf(b[1]) || a[0].localeCompare(b[0]));
+  }
+  return { roster, missing: [] };
+}
+
 function render(roster) {
   const body = Object.keys(roster).sort((a, b) => a.localeCompare(b)).map(k =>
     `    ${JSON.stringify(k)}: [\n` + roster[k].map(p => `      ${JSON.stringify(p)}`).join(',\n') + '\n    ]').join(',\n');
@@ -214,46 +232,59 @@ ${body}
 async function main() {
   const args = process.argv.slice(2);
   const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
-  const source = opt('--source', 'wikidata');
-  let res, minClubs;
-  if (source === 'wikidata') {
-    const query = async q => {
-      for (let attempt = 1; ; attempt++) {
-        try {
-          const r = await fetch(SPARQL, {
-            method: 'POST',
-            headers: {
-              Accept: 'application/sparql-results+json', 'Content-Type': 'application/x-www-form-urlencoded',
-              'User-Agent': 'prancheta-8bit-roster/1.0 (open-source game roster updater)'
-            },
-            body: 'format=json&query=' + encodeURIComponent(q)
-          });
-          if (r.ok) return await r.json();
-          if (![429, 500, 502, 503, 504].includes(r.status) || attempt >= 4) throw new Error(`Wikidata ${r.status}`);
-          const wait = Number(r.headers.get('retry-after')) || 5 * attempt;
-          console.log(`  Wikidata ${r.status}; tentando de novo em ${wait}s (${attempt}/4)`);
-          await new Promise(ok => setTimeout(ok, wait * 1000));
-        } catch (e) {
-          if (/^Wikidata/.test(e.message) || attempt >= 4) throw e;
-          console.log(`  erro de rede (${e.message}); tentando de novo (${attempt}/4)`);
-          await new Promise(ok => setTimeout(ok, 5000 * attempt));
-        }
+  const source = opt('--source', 'auto');
+  const UA = 'prancheta-8bit-roster/1.0 (open-source game roster updater)';
+  const sleep = s => new Promise(ok => setTimeout(ok, s * 1000));
+  // GET/POST com novas tentativas em erros temporários
+  const http = async (label, url, init) => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const r = await fetch(url, init);
+        if (r.ok) return await r.json();
+        if (![429, 500, 502, 503, 504].includes(r.status) || attempt >= 4) throw new Error(`${label} ${r.status}`);
+        const wait = Number(r.headers.get('retry-after')) || 10 * attempt;
+        console.log(`  ${label} ${r.status}; tentando de novo em ${wait}s (${attempt}/4)`);
+        await sleep(wait);
+      } catch (e) {
+        if (e.message.startsWith(label) || attempt >= 4) throw e;
+        console.log(`  erro de rede (${e.message}); tentando de novo (${attempt}/4)`);
+        await sleep(5 * attempt);
       }
-    };
-    res = await buildWikidata(query); minClubs = 20;
-  } else if (source === 'apifootball') {
+    }
+  };
+  const wikidata = () => buildWikidata(q => http('Wikidata', SPARQL, {
+    method: 'POST',
+    headers: { Accept: 'application/sparql-results+json', 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
+    body: 'format=json&query=' + encodeURIComponent(q)
+  }));
+  const footballData = () => buildFootballData(p => http('football-data.org', FD_API + p, {
+    headers: { 'X-Auth-Token': process.env.FOOTBALL_DATA_TOKEN, 'User-Agent': UA }
+  }));
+  const apiFootball = () => {
     const key = process.env.API_FOOTBALL_KEY;
     if (!key) { console.error('Defina API_FOOTBALL_KEY.'); process.exit(1); }
-    const get = async p => {
-      const r = await fetch(API + p, { headers: { 'x-apisports-key': key } });
-      if (!r.ok) throw new Error(`API ${r.status} em ${p}`);
-      const j = await r.json();
+    return build(async p => {
+      const j = await http('API-Football', API + p, { headers: { 'x-apisports-key': key } });
       const errs = j.errors && (Array.isArray(j.errors) ? j.errors : Object.values(j.errors));
       if (errs && errs.length) throw new Error(`API: ${JSON.stringify(j.errors)}`);
       return j;
-    };
-    res = await build(get, Number(opt('--season', new Date().getFullYear()))); minClubs = 40;
-  } else { console.error('--source deve ser wikidata ou apifootball'); process.exit(1); }
+    }, Number(opt('--season', new Date().getFullYear())));
+  };
+
+  let res, minClubs = 20;
+  if (source === 'wikidata') res = await wikidata();
+  else if (source === 'apifootball') { res = await apiFootball(); minClubs = 40; }
+  else if (source === 'auto') {
+    // Wikidata para tudo; football-data.org (se houver token) sobrescreve a Série A com dados mais confiáveis.
+    res = await wikidata();
+    if (process.env.FOOTBALL_DATA_TOKEN) {
+      const fd = await footballData();
+      console.log(`football-data.org: ${Object.keys(fd.roster).length} clubes da Série A`);
+      Object.assign(res.roster, fd.roster);
+      res.missing = res.missing.filter(n => !res.roster[n]);
+    } else console.log('FOOTBALL_DATA_TOKEN não definido: Série A virá só da Wikidata.');
+  } else { console.error('--source: auto | wikidata | apifootball'); process.exit(1); }
+
   const { roster, missing } = res;
   console.log(`${Object.keys(roster).length} clubes atualizados; ${missing.length} sem elenco real: ${missing.join(', ') || '-'}`);
   // Segurança: se quase nada veio, não sobrescreve um arquivo bom.
@@ -264,5 +295,5 @@ async function main() {
   if (!args.includes('--dry')) fs.writeFileSync(path.join(__dirname, '../js/roster.js'), render(roster));
 }
 
-module.exports = { norm, matcher, squadFromApi, build, buildWikidata, gameName, render };
+module.exports = { norm, matcher, squadFromApi, build, buildWikidata, buildFootballData, gameName, render };
 if (require.main === module) main().catch(e => { console.error(e.message); process.exit(1); });

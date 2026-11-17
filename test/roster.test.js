@@ -48,7 +48,20 @@ assert.strictEqual(U.gameName('Gabriel Barbosa de Almeida', ''), 'Gabriel Almeid
 assert.strictEqual(U.gameName('Pedro Lima', ''), 'Pedro Lima');
 assert.strictEqual(U.gameName('Gabriel Barbosa Almeida', 'Gabigol'), 'Gabigol');
 
+// 1c) football-data.org
+const fdGet = async () => ({ teams: [
+  { name: 'CR Flamengo', shortName: 'Flamengo', tla: 'FLA', squad: [
+    ...Array.from({ length: 24 }, (_, i) => ({ name: `Jogador ${i}`, position: ['Goalkeeper', 'Defence', 'Midfield', 'Offence'][i % 4], dateOfBirth: '1999-03-01' })),
+    { name: 'Sem Posição', position: null, dateOfBirth: '1990-01-01' }] },
+  { name: 'Red Bull Bragantino', shortName: 'RB Bragantino', tla: 'RBB', squad: [] },
+  { name: 'Time Desconhecido', shortName: 'XYZ', tla: 'XYZ', squad: [] }
+] });
+
 (async () => {
+  const fd = await U.buildFootballData(fdGet, new Date('2026-06-15'), () => {});
+  assert.deepStrictEqual(Object.keys(fd.roster), ['Flamengo']);       // Bragantino: elenco vazio; desconhecido ignorado
+  assert.strictEqual(fd.roster.Flamengo.length, 24);                  // sem posição descartado
+  assert.deepStrictEqual(fd.roster.Flamengo.map(p => p[1]).filter((x, i, a) => a.indexOf(x) === i), ['G', 'D', 'M', 'A']);
   const wd = await U.buildWikidata(fakeQuery, new Date('2026-06-15'), () => {});
   assert.deepStrictEqual(Object.keys(wd.roster).sort(), ['Atlético-GO', 'Atlético-MG', 'Flamengo']);
   assert.strictEqual(wd.roster.Flamengo.length, 24);  // escolheu o clube maior, não o homônimo de SP
