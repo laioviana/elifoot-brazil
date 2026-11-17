@@ -24,7 +24,7 @@ const ALIAS = {
   'vasco da gama': 'Vasco', 'atletico goianiense': 'Atlético-GO', 'operario': 'Operário-PR', 'ec vitoria': 'Vitória',
   'sport recife': 'Sport', 'ceara': 'Ceará', 'botafogo sp': 'Botafogo-SP', 'botafogo pb': 'Botafogo-PB',
   'america mg': 'América-MG', 'america rn': 'América-RN', 'athletic club': 'Athletic-MG', 'barra fc': 'Barra-SC',
-  'sao bernardo': 'São Bernardo', 'inter de limeira': 'Inter de Limeira', 'maranhao': 'Maranhão'
+  'mineiro': 'Atlético-MG', 'paranaense': 'Athletico-PR', 'clube do remo': 'Remo', 'sao bernardo': 'São Bernardo', 'inter de limeira': 'Inter de Limeira', 'maranhao': 'Maranhão'
 };
 
 const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -34,7 +34,9 @@ function matcher() {
   const byNorm = new Map();
   D.CLUBS.forEach((list, div) => list.forEach(c => byNorm.set(norm(c[0]), { name: c[0], div })));
   for (const [k, v] of Object.entries(ALIAS)) byNorm.set(norm(k), byNorm.get(norm(v)) || { name: v });
-  return apiName => byNorm.get(norm(apiName));
+  const byAbbr = new Map();
+  D.CLUBS.forEach((list, div) => list.forEach(c => byAbbr.set(c[1].toLowerCase(), { name: c[0], div })));
+  return apiName => byNorm.get(norm(apiName)) || byAbbr.get(String(apiName).trim().toLowerCase());
 }
 
 function squadFromApi(players) {
@@ -136,7 +138,7 @@ function candidates(wdClubs, log = () => {}) {
   return out;
 }
 
-async function buildWikidata(query, now = new Date(), log = console.log) {
+async function buildWikidata(query, now = new Date(), log = console.log, { recentYears = 4 } = {}) {
   const wdClubs = (await query(CLUBS_QUERY)).results.bindings.map(b => ({
     id: qid(b.club.value), label: b.label && b.label.value, label2: b.label2 && b.label2.value,
     alts: b.alts && b.alts.value ? b.alts.value.split('|') : [], uf: b.iso && b.iso.value.slice(3)
@@ -162,7 +164,9 @@ async function buildWikidata(query, now = new Date(), log = console.log) {
     if (b.start && (!e.start || b.start.value > e.start)) e.start = b.start.value;
     m.set(id, e);
   }
-  const size = id => (byClub.get(id) || new Map()).size;
+  // vínculos sem data de fim e com início antigo quase sempre são ex-jogadores: só vale quem entrou recentemente
+  const cutoff = new Date(now.getTime() - recentYears * 365.25 * 864e5).toISOString();
+  const size = id => [...(byClub.get(id) || new Map()).values()].filter(e => e.start && e.start >= cutoff).length;
   const ranked = new Map([...cand].map(([name, list]) => [name, list.slice().sort((x, y) => size(y.id) - size(x.id))]));
   // cada clube da Wikidata serve a um só clube do jogo; em conflito vence o rótulo mais justo ao nome
   const banned = new Map([...ranked.keys()].map(k => [k, new Set()]));
@@ -183,13 +187,14 @@ async function buildWikidata(query, now = new Date(), log = console.log) {
     const best = avail[0];
     if (!best) { missing.push(name); log(`  ! ${name}: nenhum clube correspondente na Wikidata`); continue; }
     const n = size(best.id);
-    if (n < MIN_REAL) { missing.push(name); log(`  ! ${name}: só ${n} jogadores na Wikidata (${best.id})`); continue; }
+    if (n < MIN_REAL) { missing.push(name); log(`  ! ${name}: só ${n} jogadores recentes (últimos ${recentYears} anos) na Wikidata (${best.id})`); continue; }
     if (avail[1] && size(avail[1].id) >= n / 2) log(`  ? ${name}: ambíguo entre ${best.id} (${n}) e ${avail[1].id} (${size(avail[1].id)}); usando o primeiro`);
     // a Wikidata raramente encerra vínculos antigos: fica quem entrou mais recentemente (sem data = mais antigo)
     const list2 = [...byClub.get(best.id).values()].filter(e => e.label)
       .map(e => ({ ...e, age: e.dob ? ageOf(e.dob, now) : 25 })).filter(e => e.age <= 40)
+      .filter(e => e.start && e.start >= cutoff)
       .sort((a, b) => (b.start || '').localeCompare(a.start || '')).slice(0, MAX_REAL);
-    if (n > MAX_REAL * 1.5) log(`  i ${name}: ${n} vínculos abertos; mantidos os ${list2.length} mais recentes`);
+    if (n > MAX_REAL) log(`  i ${name}: ${n} vínculos recentes; mantidos os ${list2.length} mais novos`);
     let rr = 0; const fill = ['D', 'M', 'A'];
     const squad = list2.map(e => [gameName(e.label, e.nick), e.pos || fill[rr++ % 3], e.age]);
     roster[name] = squad.sort((a, b) => 'GDMA'.indexOf(a[1]) - 'GDMA'.indexOf(b[1]) || a[0].localeCompare(b[0]));

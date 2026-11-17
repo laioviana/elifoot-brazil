@@ -11,6 +11,10 @@ assert.strictEqual(m('Athletico Paranaense').name, 'Athletico-PR');
 assert.strictEqual(m('Atletico-MG').name, 'Atlético-MG');
 assert.strictEqual(m('Sao Paulo').name, 'São Paulo');
 assert.strictEqual(m('Ceará SC').name, 'Ceará');
+assert.strictEqual(m('CA Mineiro').name, 'Atlético-MG');
+assert.strictEqual(m('CA Paranaense').name, 'Athletico-PR');
+assert.strictEqual(m('Clube do Remo').name, 'Remo');
+assert.strictEqual(m('REM').name, 'Remo'); // pela sigla
 assert.strictEqual(m('Clube Inexistente'), undefined);
 
 // 2) API falsa -> roster -> arquivo gerado -> motor
@@ -31,7 +35,7 @@ const get = async p => {
 const wdBind = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { value: v }]));
 const Q = id => 'http://www.wikidata.org/entity/' + id;
 const mkPlayers = (club, n, tag) => Array.from({ length: n }, (_, i) => wdBind({
-  club: Q(club), p: Q(`P${club}${i}`), pt: `Fulano Beltrano de Tal ${tag}${i}`, dob: '2000-06-15T00:00:00Z',
+  club: Q(club), p: Q(`P${club}${i}`), pt: `Fulano Beltrano de Tal ${tag}${i}`, dob: '2000-06-15T00:00:00Z', start: '2025-01-01T00:00:00Z',
   posl: ['goalkeeper', 'centre-back', 'attacking midfielder', 'left winger'][i % 4]
 }));
 const fakeQuery = async q => q.includes('GROUP BY') ? { results: { bindings: [
@@ -42,7 +46,7 @@ const fakeQuery = async q => q.includes('GROUP BY') ? { results: { bindings: [
   wdBind({ club: Q('Q5'), label: 'Botafogo', alts: '', iso: 'BR-RJ' })
 ] } } : { results: { bindings: [
   ...mkPlayers('Q1', 24, 'F'), ...mkPlayers('Q2', 20, 'G'), ...mkPlayers('Q3', 18, 'H'), ...mkPlayers('Q4', 20, 'M'), ...mkPlayers('Q5', 5, 'B'),
-  wdBind({ club: Q('Q4'), p: Q('P-nick'), pt: 'Gabriel Barbosa Almeida Silva', nick: 'Gabigol', posl: 'striker' })
+  wdBind({ club: Q('Q4'), p: Q('P-nick'), pt: 'Gabriel Barbosa Almeida Silva', nick: 'Gabigol', posl: 'striker', start: '2025-01-01T00:00:00Z' })
 ].filter(b => q.includes('wd:' + b.club.value.split('/').pop() + ' ') || q.includes('wd:' + b.club.value.split('/').pop() + ' }')) } };
 assert.strictEqual(U.gameName('Gabriel Barbosa de Almeida', ''), 'Gabriel Almeida');
 assert.strictEqual(U.gameName('Pedro Lima', ''), 'Pedro Lima');
@@ -77,8 +81,10 @@ const fdGet = async () => ({ teams: [
   const staleQ = async q => q.includes('GROUP BY')
     ? { results: { bindings: [wdBind({ club: Q('Q9'), label: 'Esporte Clube Bahia', alts: '', iso: 'BR-BA' })] } }
     : { results: { bindings: stale('Q9', 100) } };
-  const st = await U.buildWikidata(staleQ, new Date('2026-06-15'), () => {});
+  const st = await U.buildWikidata(staleQ, new Date('2026-06-15'), () => {}, { recentYears: 30 });
   assert.strictEqual(st.roster.Bahia.length, 30);
+  const st4 = await U.buildWikidata(staleQ, new Date('2026-06-15'), () => {}); // padrão: 4 anos
+  assert(!st4.roster.Bahia && st4.missing.includes('Bahia'));  // vínculos de 2000-2024 são considerados velhos
   assert(!st.roster.Bahia.some(p => p[2] > 40));
 
   // um clube da Wikidata não pode servir a dois clubes do jogo (Amazonas x Manaus)
