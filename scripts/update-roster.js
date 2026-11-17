@@ -67,11 +67,12 @@ const CLUBS_QUERY = `SELECT ?club (SAMPLE(?l) AS ?label) (SAMPLE(?l2) AS ?label2
   OPTIONAL { ?club wdt:P159/wdt:P131* ?s. ?s wdt:P300 ?i. FILTER(STRSTARTS(?i, "BR-")) }
 } GROUP BY ?club`;
 // Só os clubes pedidos, em lotes pequenos, para não estourar o tempo limite do serviço.
-const playersQuery = ids => `SELECT ?club ?p ?pt ?en ?nick ?dob ?posl WHERE {
+const playersQuery = ids => `SELECT ?club ?p ?pt ?en ?nick ?dob ?posl ?start WHERE {
   VALUES ?club { ${ids.map(i => 'wd:' + i).join(' ')} }
   ?p p:P54 ?st. ?st ps:P54 ?club.
   FILTER NOT EXISTS { ?st pq:P582 ?end }
   FILTER NOT EXISTS { ?p wdt:P570 ?died }
+  OPTIONAL { ?st pq:P580 ?start }
   OPTIONAL { ?p rdfs:label ?pt. FILTER(LANG(?pt) = "pt") }
   OPTIONAL { ?p rdfs:label ?en. FILTER(LANG(?en) = "en") }
   OPTIONAL { ?p wdt:P1449 ?nick }
@@ -87,6 +88,7 @@ const wdPos = l => {
   if (/forward|striker|winger|attacker/.test(l)) return 'A';
   return null;
 };
+const MAX_REAL = 30; // elenco máximo importado por clube
 const MIN_REAL = 11; // abaixo disso o clube fica com nomes gerados
 const qid = u => u.slice(u.lastIndexOf('/') + 1);
 
@@ -113,13 +115,21 @@ function candidates(wdClubs, log = () => {}) {
   const out = new Map();
   D.CLUBS.flat().forEach(c => {
     const words = norm(c[0].replace(/-[A-Z]{2}$/, '')).split(' ').filter(Boolean);
-    const byName = w => [w.label, w.label2, ...w.alts].some(t => { const n = ` ${norm(t || '')} `; return words.every(x => n.includes(` ${x} `)); });
-    let list = wdClubs.filter(w => byName(w) && (!w.uf || w.uf === c[2]));
+    // "justeza": quanto do rótulo é o nome do clube (Amazonas FC > Manaus Futebol Clube para "Amazonas")
+    const fit = w => {
+      let best = 0;
+      for (const t of [w.label, w.label2, ...w.alts]) {
+        const tw = norm(t || '').split(' ').filter(Boolean);
+        if (tw.length && words.every(x => tw.includes(x))) best = Math.max(best, words.length / tw.length);
+      }
+      return best;
+    };
+    let list = wdClubs.filter(w => fit(w) > 0 && (!w.uf || w.uf === c[2]));
     if (!list.length) { // a UF da Wikidata pode estar ausente ou errada: tenta só pelo nome
-      list = wdClubs.filter(byName);
+      list = wdClubs.filter(w => fit(w) > 0);
       if (list.length) log(`  ~ ${c[0]}: nenhum clube em ${c[2]}; tentando por nome em outros estados`);
     }
-    out.set(c[0], list.map(w => w.id));
+    out.set(c[0], list.map(w => ({ id: w.id, fit: fit(w) })));
   });
   return out;
 }
@@ -131,7 +141,7 @@ async function buildWikidata(query, now = new Date(), log = console.log) {
   }));
   const byClub = new Map(); // clube -> Map(jogador -> dados)
   const cand = candidates(wdClubs, log), roster = {}, missing = [];
-  const wanted = [...new Set([...cand.values()].flat())];
+  const wanted = [...new Set([...cand.values()].flat().map(c => c.id))];
   log(`  ${wdClubs.length} clubes brasileiros na Wikidata; buscando jogadores de ${wanted.length}...`);
   const rows = [];
   for (let i = 0; i < wanted.length; i += 8) {
@@ -142,24 +152,45 @@ async function buildWikidata(query, now = new Date(), log = console.log) {
     const club = qid(b.club.value), id = qid(b.p.value);
     if (!byClub.has(club)) byClub.set(club, new Map());
     const m = byClub.get(club);
-    const e = m.get(id) || { label: null, nick: null, dob: null, pos: null };
+    const e = m.get(id) || { label: null, nick: null, dob: null, pos: null, start: null };
     e.label = e.label || (b.pt || b.en || {}).value;
     e.nick = e.nick || (b.nick && b.nick.value);
     e.dob = e.dob || (b.dob && b.dob.value);
     e.pos = e.pos || (b.posl && wdPos(b.posl.value));
+    if (b.start && (!e.start || b.start.value > e.start)) e.start = b.start.value;
     m.set(id, e);
   }
-  for (const [name, ids] of cand) {
-    const ranked = ids.map(id => ({ id, n: (byClub.get(id) || new Map()).size })).sort((a, b) => b.n - a.n);
-    const best = ranked[0];
+  const size = id => (byClub.get(id) || new Map()).size;
+  const ranked = new Map([...cand].map(([name, list]) => [name, list.slice().sort((x, y) => size(y.id) - size(x.id))]));
+  // cada clube da Wikidata serve a um só clube do jogo; em conflito vence o rótulo mais justo ao nome
+  const banned = new Map([...ranked.keys()].map(k => [k, new Set()]));
+  const choice = name => ranked.get(name).find(x => !banned.get(name).has(x.id));
+  for (let i = 0; i < 10; i++) {
+    const owners = new Map(); let conflict = false;
+    for (const name of ranked.keys()) {
+      const c = choice(name); if (!c) continue;
+      const cur = owners.get(c.id);
+      if (!cur) { owners.set(c.id, { name, fit: c.fit }); continue; }
+      conflict = true;
+      if (c.fit > cur.fit) { banned.get(cur.name).add(c.id); owners.set(c.id, { name, fit: c.fit }); } else banned.get(name).add(c.id);
+    }
+    if (!conflict) break;
+  }
+  for (const name of ranked.keys()) {
+    const avail = ranked.get(name).filter(x => !banned.get(name).has(x.id));
+    const best = avail[0];
     if (!best) { missing.push(name); log(`  ! ${name}: nenhum clube correspondente na Wikidata`); continue; }
-    if (best.n < MIN_REAL) { missing.push(name); log(`  ! ${name}: só ${best.n} jogadores na Wikidata (${best.id})`); continue; }
-    if (ranked[1] && ranked[1].n >= best.n / 2) log(`  ? ${name}: ambíguo entre ${ranked[0].id} (${best.n}) e ${ranked[1].id} (${ranked[1].n}); usando o primeiro`);
-    const list = [...byClub.get(best.id).values()].filter(e => e.label);
-    // posição ausente: distribui entre D/M/A para não zerar nenhuma linha
+    const n = size(best.id);
+    if (n < MIN_REAL) { missing.push(name); log(`  ! ${name}: só ${n} jogadores na Wikidata (${best.id})`); continue; }
+    if (avail[1] && size(avail[1].id) >= n / 2) log(`  ? ${name}: ambíguo entre ${best.id} (${n}) e ${avail[1].id} (${size(avail[1].id)}); usando o primeiro`);
+    // a Wikidata raramente encerra vínculos antigos: fica quem entrou mais recentemente (sem data = mais antigo)
+    const list2 = [...byClub.get(best.id).values()].filter(e => e.label)
+      .map(e => ({ ...e, age: e.dob ? ageOf(e.dob, now) : 25 })).filter(e => e.age <= 40)
+      .sort((a, b) => (b.start || '').localeCompare(a.start || '')).slice(0, MAX_REAL);
+    if (n > MAX_REAL * 1.5) log(`  i ${name}: ${n} vínculos abertos; mantidos os ${list2.length} mais recentes`);
     let rr = 0; const fill = ['D', 'M', 'A'];
-    const squad = list.map(e => [gameName(e.label, e.nick), e.pos || fill[rr++ % 3], e.dob ? ageOf(e.dob, now) : 25]);
-    roster[name] = squad.sort((a, b) => 'GDMA'.indexOf(a[1]) - 'GDMA'.indexOf(b[1]) || a[0].localeCompare(b[0])).slice(0, 40);
+    const squad = list2.map(e => [gameName(e.label, e.nick), e.pos || fill[rr++ % 3], e.age]);
+    roster[name] = squad.sort((a, b) => 'GDMA'.indexOf(a[1]) - 'GDMA'.indexOf(b[1]) || a[0].localeCompare(b[0]));
   }
   return { roster, missing };
 }

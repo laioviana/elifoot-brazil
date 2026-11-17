@@ -54,7 +54,26 @@ assert.strictEqual(U.gameName('Gabriel Barbosa Almeida', 'Gabigol'), 'Gabigol');
   assert.strictEqual(wd.roster.Flamengo.length, 24);  // escolheu o clube maior, não o homônimo de SP
   assert(wd.roster.Flamengo.every(p => p[2] === 26 && 'GDMA'.includes(p[1])));
   assert(wd.roster['Atlético-MG'].some(p => p[0] === 'Gabigol' && p[1] === 'A'));
-  assert(wd.missing.includes('Botafogo'));            // 5 jogadores < 16
+  assert(wd.missing.includes('Botafogo'));            // 5 jogadores < 11
+
+  // elenco com vínculos antigos: mantém só os 30 mais recentes e ninguém acima de 40 anos
+  const stale = (club, n) => Array.from({ length: n }, (_, i) => wdBind({
+    club: Q(club), p: Q(`S${i}`), pt: `Jogador ${i}`, dob: i === 0 ? '1970-01-01T00:00:00Z' : '2000-01-01T00:00:00Z',
+    posl: 'centre-back', start: `${2000 + (i % 25)}-01-01T00:00:00Z`
+  }));
+  const staleQ = async q => q.includes('GROUP BY')
+    ? { results: { bindings: [wdBind({ club: Q('Q9'), label: 'Esporte Clube Bahia', alts: '', iso: 'BR-BA' })] } }
+    : { results: { bindings: stale('Q9', 100) } };
+  const st = await U.buildWikidata(staleQ, new Date('2026-06-15'), () => {});
+  assert.strictEqual(st.roster.Bahia.length, 30);
+  assert(!st.roster.Bahia.some(p => p[2] > 40));
+
+  // um clube da Wikidata não pode servir a dois clubes do jogo (Amazonas x Manaus)
+  const dupQ = async q => q.includes('GROUP BY')
+    ? { results: { bindings: [wdBind({ club: Q('Q7'), label: 'Amazonas Futebol Clube', alts: 'Manaus', iso: 'BR-AM' })] } }
+    : { results: { bindings: stale('Q7', 20) } };
+  const dup = await U.buildWikidata(dupQ, new Date('2026-06-15'), () => {});
+  assert(dup.roster.Amazonas && !dup.roster.Manaus && dup.missing.includes('Manaus'));
   const { roster, missing } = await U.build(get, 2026, () => {});
   assert.deepStrictEqual(Object.keys(roster).sort(), ['Bragantino', 'Ceará', 'Flamengo', 'Tombense']);
   assert.strictEqual(missing.length, 80 - 4);
