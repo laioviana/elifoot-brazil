@@ -91,7 +91,10 @@ function gameName(label, nick) {
 }
 const ageOf = (dob, now) => {
   const d = new Date(dob);
-  return isNaN(d) ? 25 : Math.max(16, Math.min(41, Math.floor((now - d) / 31557600000)));
+  if (isNaN(d)) return 25;
+  let age = now.getUTCFullYear() - d.getUTCFullYear();
+  if (now.getUTCMonth() < d.getUTCMonth() || (now.getUTCMonth() === d.getUTCMonth() && now.getUTCDate() < d.getUTCDate())) age--;
+  return Math.max(16, Math.min(41, age));
 };
 
 // Clubes da Wikidata que correspondem a cada clube do jogo: todas as palavras do nome no rótulo/apelidos e
