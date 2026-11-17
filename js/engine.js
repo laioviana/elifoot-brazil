@@ -65,7 +65,7 @@
     return list.length;
   }
   function mkSquad(G, team, rating) {
-    if (realSquad(G, team, rating) >= 16) { ensureSquad(G, team, false); return; }
+    if (realSquad(G, team, rating) >= 11) { ensureSquad(G, team, false); return; }
     team.players.length = 0;
     const cnt = { G: 3, D: 7, M: 7, A: 5 };
     for (const pos in cnt) for (let i = 0; i < cnt[pos]; i++) {
