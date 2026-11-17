@@ -43,7 +43,22 @@ npm test         # simula 6 temporadas e valida o motor
 | `css/style.css` | visual 8-bit |
 | `test/sim.test.js` | simulação headless de várias temporadas |
 
-Os clubes são reais; **todos os jogadores são fictícios** e gerados aleatoriamente. As divisões
+Os clubes são reais. Os jogadores usam **elencos reais** (nome, posição e idade) de `js/roster.js` quando o clube
+consta lá; a força de cada jogador continua derivada da força do clube. Clubes sem elenco real, vagas que faltam
+e as revelações da base usam nomes fictícios gerados.
+
+### Elencos reais
+
+`js/roster.js` é gerado por `scripts/update-roster.js` a partir da [API-Football](https://www.api-football.com)
+(~84 chamadas por rodada; cabe no plano grátis de 100/dia):
+
+```bash
+API_FOOTBALL_KEY=... npm run update-roster -- --season 2026
+```
+
+O workflow `.github/workflows/update-roster.yml` roda toda segunda-feira e abre um PR se algo mudou. Para ativar,
+crie o secret `API_FOOTBALL_KEY` no repositório e permita que o Actions crie PRs (Settings → Actions → General).
+Se o nome de um clube na API não casar com `js/data.js`, o script avisa; ajuste o `ALIAS` no topo do script. As divisões
 refletem aproximadamente a temporada 2026 (a Série D foi reduzida a 20 clubes).
 
 ## Publicação

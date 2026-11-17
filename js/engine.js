@@ -2,6 +2,7 @@
 (function (root) {
   'use strict';
   const D = root.PB_DATA || require('./data.js');
+  const ROSTER = root.PB_ROSTER || (typeof require === 'function' ? require('./roster.js') : {});
   const E = { lang: 'pt', rand: Math.random };
   const L = (pt, en) => (E.lang === 'en' ? en : pt);
   const r = () => E.rand();
@@ -52,7 +53,20 @@
     team.players.push(p);
     return p;
   }
+  // Elenco real (js/roster.js): nomes, posições e idades reais; a força continua vindo da força do clube.
+  function realSquad(G, team, rating) {
+    const list = (ROSTER[team.name] || []).filter(x => x && x[0] && 'GDMA'.includes(x[1])).slice(0, 26);
+    for (const [n, pos, age0] of list) {
+      const age = clamp(Math.round(age0) || 25, 16, 40);
+      const p = mkPlayer(G, pos, rating + ri(-7, 5) - (age <= 20 ? 3 : 0), age);
+      p.n = n; p.real = 1;
+      team.players.push(p);
+    }
+    return list.length;
+  }
   function mkSquad(G, team, rating) {
+    if (realSquad(G, team, rating) >= 16) { ensureSquad(G, team, false); return; }
+    team.players.length = 0;
     const cnt = { G: 3, D: 7, M: 7, A: 5 };
     for (const pos in cnt) for (let i = 0; i < cnt[pos]; i++) {
       const age = ri(18, 34);

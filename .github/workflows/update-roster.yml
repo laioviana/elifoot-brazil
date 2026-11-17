@@ -1,0 +1,34 @@
+name: Update roster
+on:
+  schedule:
+    - cron: '17 6 * * 1'   # toda segunda, 06:17 UTC
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/update-roster.js
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      - run: npm test
+      - name: Open PR if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet js/roster.js; then echo "Sem mudanças."; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B roster-update
+          git add js/roster.js
+          git commit -m "Atualiza elencos reais (API-Football)"
+          git push --force -u origin roster-update
+          gh pr create --base "${GITHUB_REF_NAME}" --head roster-update \
+            --title "Atualiza elencos reais" --body "Atualização automática de js/roster.js via scripts/update-roster.js." \
+            || echo "PR já existe; branch atualizada."
