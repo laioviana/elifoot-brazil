@@ -27,7 +27,34 @@ const get = async p => {
   const id = Number(/team=(\d+)/.exec(p)[1]);
   return fakeSquad(id);
 };
+// 1b) Wikidata: consultas falsas
+const wdBind = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { value: v }]));
+const Q = id => 'http://www.wikidata.org/entity/' + id;
+const mkPlayers = (club, n, tag) => Array.from({ length: n }, (_, i) => wdBind({
+  club: Q(club), p: Q(`P${club}${i}`), pt: `Fulano Beltrano de Tal ${tag}${i}`, dob: '2000-06-15T00:00:00Z',
+  pl: ['goalkeeper', 'defender', 'midfielder', 'forward'][i % 4]
+}));
+const fakeQuery = async q => q.includes('GROUP BY') ? { results: { bindings: [
+  wdBind({ club: Q('Q1'), label: 'Clube de Regatas do Flamengo', alts: 'Flamengo|CR Flamengo', iso: 'BR-RJ' }),
+  wdBind({ club: Q('Q2'), label: 'Flamengo de Guarulhos', alts: '', iso: 'BR-SP' }),
+  wdBind({ club: Q('Q3'), label: 'Atlético Clube Goianiense', alts: '', iso: 'BR-GO' }),
+  wdBind({ club: Q('Q4'), label: 'Clube Atlético Mineiro', alts: 'Atlético Mineiro', iso: 'BR-MG' }),
+  wdBind({ club: Q('Q5'), label: 'Botafogo', alts: '', iso: 'BR-RJ' })
+] } } : { results: { bindings: [
+  ...mkPlayers('Q1', 24, 'F'), ...mkPlayers('Q2', 20, 'G'), ...mkPlayers('Q3', 18, 'H'), ...mkPlayers('Q4', 20, 'M'), ...mkPlayers('Q5', 5, 'B'),
+  wdBind({ club: Q('Q4'), p: Q('P-nick'), pt: 'Gabriel Barbosa Almeida Silva', nick: 'Gabigol', pl: 'forward' })
+] } };
+assert.strictEqual(U.gameName('Gabriel Barbosa de Almeida', ''), 'Gabriel Almeida');
+assert.strictEqual(U.gameName('Pedro Lima', ''), 'Pedro Lima');
+assert.strictEqual(U.gameName('Gabriel Barbosa Almeida', 'Gabigol'), 'Gabigol');
+
 (async () => {
+  const wd = await U.buildWikidata(fakeQuery, new Date('2026-06-15'), () => {});
+  assert.deepStrictEqual(Object.keys(wd.roster).sort(), ['Atlético-GO', 'Atlético-MG', 'Flamengo']);
+  assert.strictEqual(wd.roster.Flamengo.length, 24);  // escolheu o clube maior, não o homônimo de SP
+  assert(wd.roster.Flamengo.every(p => p[2] === 26 && 'GDMA'.includes(p[1])));
+  assert(wd.roster['Atlético-MG'].some(p => p[0] === 'Gabigol' && p[1] === 'A'));
+  assert(wd.missing.includes('Botafogo'));            // 5 jogadores < 16
   const { roster, missing } = await U.build(get, 2026, () => {});
   assert.deepStrictEqual(Object.keys(roster).sort(), ['Bragantino', 'Ceará', 'Flamengo', 'Tombense']);
   assert.strictEqual(missing.length, 80 - 4);

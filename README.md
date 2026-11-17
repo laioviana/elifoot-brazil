@@ -49,16 +49,19 @@ e as revelações da base usam nomes fictícios gerados.
 
 ### Elencos reais
 
-`js/roster.js` é gerado por `scripts/update-roster.js` a partir da [API-Football](https://www.api-football.com)
-(~84 chamadas por rodada; cabe no plano grátis de 100/dia):
+`js/roster.js` é gerado por `scripts/update-roster.js`. A fonte padrão é a **Wikidata** (grátis, sem chave):
 
 ```bash
-API_FOOTBALL_KEY=... npm run update-roster -- --season 2026
+npm run update-roster                 # Wikidata
+npm run update-roster -- --dry        # só mostra o resultado, sem gravar
+API_FOOTBALL_KEY=... npm run update-roster -- --source apifootball --season 2026   # alternativa paga
 ```
 
-O workflow `.github/workflows/update-roster.yml` roda toda segunda-feira e abre um PR se algo mudou. Para ativar,
-crie o secret `API_FOOTBALL_KEY` no repositório e permita que o Actions crie PRs (Settings → Actions → General).
-Se o nome de um clube na API não casar com `js/data.js`, o script avisa; ajuste o `ALIAS` no topo do script. As divisões
+A Wikidata é mantida por voluntários: a cobertura é boa na Série A/B e irregular na C/D, e transferências podem
+demorar a aparecer. Clubes com menos de 16 jogadores ficam com nomes gerados, e um clube que some de uma
+atualização mantém o elenco anterior. O workflow `.github/workflows/update-roster.yml` roda toda segunda-feira
+e abre um PR se algo mudou (Settings → Actions → General → permitir que o Actions crie PRs).
+Com a API-Football, se o nome de um clube não casar com `js/data.js`, o script avisa; ajuste o `ALIAS` no topo do script. As divisões
 refletem aproximadamente a temporada 2026 (a Série D foi reduzida a 20 clubes).
 
 ## Publicação

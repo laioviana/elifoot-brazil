@@ -14,9 +14,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node scripts/update-roster.js
-        env:
-          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      - run: node scripts/update-roster.js --source wikidata
       - run: npm test
       - name: Open PR if changed
         env:
@@ -27,7 +25,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B roster-update
           git add js/roster.js
-          git commit -m "Atualiza elencos reais (API-Football)"
+          git commit -m "Atualiza elencos reais (Wikidata)"
           git push --force -u origin roster-update
           gh pr create --base "${GITHUB_REF_NAME}" --head roster-update \
             --title "Atualiza elencos reais" --body "Atualização automática de js/roster.js via scripts/update-roster.js." \

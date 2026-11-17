@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-/* Atualiza js/roster.js com elencos reais da API-Football (https://www.api-football.com).
+/* Atualiza js/roster.js com elencos reais.
  *
- *   API_FOOTBALL_KEY=xxxx node scripts/update-roster.js [--season 2026] [--dry]
+ *   node scripts/update-roster.js [--source wikidata] [--dry]        (padrão; grátis, sem chave)
+ *   API_FOOTBALL_KEY=xxxx node scripts/update-roster.js --source apifootball [--season 2026] [--dry]
  *
- * Custo: 4 chamadas de times (uma por divisão) + 1 por clube (~84/rodada; o plano grátis permite 100/dia).
+ * Wikidata: 2 consultas SPARQL (clubes e jogadores atuais). Boa cobertura na Série A/B, irregular na C/D.
+ * API-Football: ~84 chamadas por rodada; a temporada atual exige plano pago.
  * Só nome, posição e idade são usados — a força dos jogadores segue a força do clube em js/data.js.
  */
 'use strict';
@@ -55,6 +57,89 @@ async function build(get, season, log = console.log) {
   return { roster, missing: [...missing] };
 }
 
+/* ---------- Wikidata ---------- */
+const SPARQL = 'https://query.wikidata.org/sparql';
+const CLUBS_QUERY = `SELECT ?club (SAMPLE(?l) AS ?label) (GROUP_CONCAT(DISTINCT ?a; separator="|") AS ?alts) (SAMPLE(?i) AS ?iso) WHERE {
+  ?club wdt:P31/wdt:P279* wd:Q476028; wdt:P17 wd:Q155.
+  OPTIONAL { ?club rdfs:label ?l. FILTER(LANG(?l) = "pt") }
+  OPTIONAL { ?club skos:altLabel ?a. FILTER(LANG(?a) = "pt") }
+  OPTIONAL { ?club wdt:P159/wdt:P131* ?s. ?s wdt:P300 ?i. FILTER(STRSTARTS(?i, "BR-")) }
+} GROUP BY ?club`;
+const PLAYERS_QUERY = `SELECT ?club ?p ?pt ?en ?nick ?dob ?pl WHERE {
+  ?p wdt:P106 wd:Q937857; p:P54 ?st. ?st ps:P54 ?club.
+  FILTER NOT EXISTS { ?st pq:P582 ?end }
+  FILTER NOT EXISTS { ?p wdt:P570 ?died }
+  ?club wdt:P17 wd:Q155.
+  OPTIONAL { ?p rdfs:label ?pt. FILTER(LANG(?pt) = "pt") }
+  OPTIONAL { ?p rdfs:label ?en. FILTER(LANG(?en) = "en") }
+  OPTIONAL { ?p wdt:P1449 ?nick }
+  OPTIONAL { ?p wdt:P569 ?dob }
+  OPTIONAL { ?p wdt:P413/wdt:P279* ?pc. ?pc rdfs:label ?pl.
+             FILTER(?pl IN ("goalkeeper"@en, "defender"@en, "midfielder"@en, "forward"@en)) }
+}`;
+const WD_POS = { goalkeeper: 'G', defender: 'D', midfielder: 'M', forward: 'A' };
+const qid = u => u.slice(u.lastIndexOf('/') + 1);
+
+// Nome de jogo: apelido (P1449) se houver; senão o rótulo, encurtado para "Primeiro Último" quando longo.
+function gameName(label, nick) {
+  const clean = x => (x || '').replace(/\s+/g, ' ').trim();
+  nick = clean(nick); label = clean(label);
+  if (nick && nick.length <= 18) return nick;
+  const w = label.split(' ');
+  if (w.length <= 3) return label;
+  return `${w[0]} ${w[w.length - 1]}`;
+}
+const ageOf = (dob, now) => {
+  const d = new Date(dob);
+  return isNaN(d) ? 25 : Math.max(16, Math.min(41, Math.floor((now - d) / 31557600000)));
+};
+
+// Clubes da Wikidata que correspondem a cada clube do jogo: todas as palavras do nome no rótulo/apelidos e
+// UF igual (quando a Wikidata informa). O desempate é feito depois, pelo nº de jogadores atuais.
+function candidates(wdClubs) {
+  const out = new Map();
+  D.CLUBS.flat().forEach(c => {
+    const words = norm(c[0].replace(/-[A-Z]{2}$/, '')).split(' ').filter(Boolean);
+    out.set(c[0], wdClubs.filter(w => {
+      if (w.uf && w.uf !== c[2]) return false;
+      return [w.label, ...w.alts].some(t => { const n = ` ${norm(t || '')} `; return words.every(x => n.includes(` ${x} `)); });
+    }).map(w => w.id));
+  });
+  return out;
+}
+
+async function buildWikidata(query, now = new Date(), log = console.log) {
+  const wdClubs = (await query(CLUBS_QUERY)).results.bindings.map(b => ({
+    id: qid(b.club.value), label: b.label && b.label.value,
+    alts: b.alts && b.alts.value ? b.alts.value.split('|') : [], uf: b.iso && b.iso.value.slice(3)
+  }));
+  const byClub = new Map(); // clube -> Map(jogador -> dados)
+  for (const b of (await query(PLAYERS_QUERY)).results.bindings) {
+    const club = qid(b.club.value), id = qid(b.p.value);
+    if (!byClub.has(club)) byClub.set(club, new Map());
+    const m = byClub.get(club);
+    const e = m.get(id) || { label: null, nick: null, dob: null, pos: null };
+    e.label = e.label || (b.pt || b.en || {}).value;
+    e.nick = e.nick || (b.nick && b.nick.value);
+    e.dob = e.dob || (b.dob && b.dob.value);
+    e.pos = e.pos || (b.pl && WD_POS[b.pl.value]);
+    m.set(id, e);
+  }
+  const cand = candidates(wdClubs), roster = {}, missing = [];
+  for (const [name, ids] of cand) {
+    const ranked = ids.map(id => ({ id, n: (byClub.get(id) || new Map()).size })).sort((a, b) => b.n - a.n);
+    const best = ranked[0];
+    if (!best || best.n < 16) { missing.push(name); if (best) log(`  ! ${name}: só ${best.n} jogadores na Wikidata`); continue; }
+    if (ranked[1] && ranked[1].n >= best.n / 2) log(`  ? ${name}: ambíguo entre ${ranked[0].id} (${best.n}) e ${ranked[1].id} (${ranked[1].n}); usando o primeiro`);
+    const list = [...byClub.get(best.id).values()].filter(e => e.label);
+    // posição ausente: distribui entre D/M/A para não zerar nenhuma linha
+    let rr = 0; const fill = ['D', 'M', 'A'];
+    const squad = list.map(e => [gameName(e.label, e.nick), e.pos || fill[rr++ % 3], e.dob ? ageOf(e.dob, now) : 25]);
+    roster[name] = squad.sort((a, b) => 'GDMA'.indexOf(a[1]) - 'GDMA'.indexOf(b[1]) || a[0].localeCompare(b[0])).slice(0, 40);
+  }
+  return { roster, missing };
+}
+
 function render(roster) {
   const body = Object.keys(roster).sort((a, b) => a.localeCompare(b)).map(k =>
     `    ${JSON.stringify(k)}: [\n` + roster[k].map(p => `      ${JSON.stringify(p)}`).join(',\n') + '\n    ]').join(',\n');
@@ -73,26 +158,40 @@ ${body}
 
 async function main() {
   const args = process.argv.slice(2);
-  const key = process.env.API_FOOTBALL_KEY;
-  if (!key) { console.error('Defina API_FOOTBALL_KEY.'); process.exit(1); }
-  const season = Number((args[args.indexOf('--season') + 1]) || new Date().getFullYear());
-  const get = async p => {
-    const res = await fetch(API + p, { headers: { 'x-apisports-key': key } });
-    if (!res.ok) throw new Error(`API ${res.status} em ${p}`);
-    const j = await res.json();
-    const errs = j.errors && (Array.isArray(j.errors) ? j.errors : Object.values(j.errors));
-    if (errs && errs.length) throw new Error(`API: ${JSON.stringify(j.errors)}`);
-    return j;
-  };
-  const { roster, missing } = await build(get, season);
+  const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
+  const source = opt('--source', 'wikidata');
+  let res, minClubs;
+  if (source === 'wikidata') {
+    const query = async q => {
+      const r = await fetch(SPARQL + '?format=json&query=' + encodeURIComponent(q), {
+        headers: { Accept: 'application/sparql-results+json', 'User-Agent': 'prancheta-8bit-roster/1.0 (open-source game roster updater)' }
+      });
+      if (!r.ok) throw new Error(`Wikidata ${r.status}`);
+      return r.json();
+    };
+    res = await buildWikidata(query); minClubs = 20;
+  } else if (source === 'apifootball') {
+    const key = process.env.API_FOOTBALL_KEY;
+    if (!key) { console.error('Defina API_FOOTBALL_KEY.'); process.exit(1); }
+    const get = async p => {
+      const r = await fetch(API + p, { headers: { 'x-apisports-key': key } });
+      if (!r.ok) throw new Error(`API ${r.status} em ${p}`);
+      const j = await r.json();
+      const errs = j.errors && (Array.isArray(j.errors) ? j.errors : Object.values(j.errors));
+      if (errs && errs.length) throw new Error(`API: ${JSON.stringify(j.errors)}`);
+      return j;
+    };
+    res = await build(get, Number(opt('--season', new Date().getFullYear()))); minClubs = 40;
+  } else { console.error('--source deve ser wikidata ou apifootball'); process.exit(1); }
+  const { roster, missing } = res;
   console.log(`${Object.keys(roster).length} clubes atualizados; ${missing.length} sem elenco real: ${missing.join(', ') || '-'}`);
   // Segurança: se quase nada veio, não sobrescreve um arquivo bom.
-  if (Object.keys(roster).length < 40) { console.error('Poucos clubes retornados; abortando sem gravar.'); process.exit(2); }
-  // Clubes que a API não devolveu agora mantêm o elenco anterior.
+  if (Object.keys(roster).length < minClubs) { console.error('Poucos clubes retornados; abortando sem gravar.'); process.exit(2); }
+  // Clubes que a fonte não devolveu agora mantêm o elenco anterior.
   const prev = require('../js/roster.js');
   for (const k of Object.keys(prev)) if (!roster[k] && D.CLUBS.flat().some(c => c[0] === k)) roster[k] = prev[k];
   if (!args.includes('--dry')) fs.writeFileSync(path.join(__dirname, '../js/roster.js'), render(roster));
 }
 
-module.exports = { norm, matcher, squadFromApi, build, render };
+module.exports = { norm, matcher, squadFromApi, build, buildWikidata, gameName, render };
 if (require.main === module) main().catch(e => { console.error(e.message); process.exit(1); });
