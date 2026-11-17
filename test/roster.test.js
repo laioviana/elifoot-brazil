@@ -32,7 +32,7 @@ const wdBind = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { v
 const Q = id => 'http://www.wikidata.org/entity/' + id;
 const mkPlayers = (club, n, tag) => Array.from({ length: n }, (_, i) => wdBind({
   club: Q(club), p: Q(`P${club}${i}`), pt: `Fulano Beltrano de Tal ${tag}${i}`, dob: '2000-06-15T00:00:00Z',
-  pl: ['goalkeeper', 'defender', 'midfielder', 'forward'][i % 4]
+  posl: ['goalkeeper', 'centre-back', 'attacking midfielder', 'left winger'][i % 4]
 }));
 const fakeQuery = async q => q.includes('GROUP BY') ? { results: { bindings: [
   wdBind({ club: Q('Q1'), label: 'Clube de Regatas do Flamengo', alts: 'Flamengo|CR Flamengo', iso: 'BR-RJ' }),
@@ -42,8 +42,8 @@ const fakeQuery = async q => q.includes('GROUP BY') ? { results: { bindings: [
   wdBind({ club: Q('Q5'), label: 'Botafogo', alts: '', iso: 'BR-RJ' })
 ] } } : { results: { bindings: [
   ...mkPlayers('Q1', 24, 'F'), ...mkPlayers('Q2', 20, 'G'), ...mkPlayers('Q3', 18, 'H'), ...mkPlayers('Q4', 20, 'M'), ...mkPlayers('Q5', 5, 'B'),
-  wdBind({ club: Q('Q4'), p: Q('P-nick'), pt: 'Gabriel Barbosa Almeida Silva', nick: 'Gabigol', pl: 'forward' })
-] } };
+  wdBind({ club: Q('Q4'), p: Q('P-nick'), pt: 'Gabriel Barbosa Almeida Silva', nick: 'Gabigol', posl: 'striker' })
+].filter(b => q.includes('wd:' + b.club.value.split('/').pop() + ' ') || q.includes('wd:' + b.club.value.split('/').pop() + ' }')) } };
 assert.strictEqual(U.gameName('Gabriel Barbosa de Almeida', ''), 'Gabriel Almeida');
 assert.strictEqual(U.gameName('Pedro Lima', ''), 'Pedro Lima');
 assert.strictEqual(U.gameName('Gabriel Barbosa Almeida', 'Gabigol'), 'Gabigol');
