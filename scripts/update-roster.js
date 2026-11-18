@@ -28,7 +28,7 @@ const ALIAS = {
   'sport recife': 'Sport', 'ceara': 'Ceará', 'botafogo sp': 'Botafogo-SP', 'botafogo pb': 'Botafogo-PB',
   'america mg': 'América-MG', 'america rn': 'América-RN', 'athletic club': 'Athletic-MG', 'barra fc': 'Barra-SC',
   'sport club corinthians paulista': 'Corinthians', 'botafogo de futebol e regatas': 'Botafogo', 'clube atletico mineiro': 'Atlético-MG',
-  'sport club internacional': 'Internacional', 'gremio novorizontino': 'Novorizontino', 'clube de regatas brasil al': 'CRB',
+  'sport club internacional': 'Internacional', 'aa internacional de limeira': 'Inter de Limeira', 'gremio esportivo brasil': 'Brasil de Pelotas', 'sport club do recife': 'Sport', 'gremio novorizontino': 'Novorizontino', 'clube de regatas brasil al': 'CRB',
   'atletico clube goianiense': 'Atlético-GO', 'mineiro': 'Atlético-MG', 'paranaense': 'Athletico-PR', 'clube do remo': 'Remo', 'sao bernardo': 'São Bernardo', 'inter de limeira': 'Inter de Limeira', 'maranhao': 'Maranhão'
 };
 
@@ -303,6 +303,7 @@ async function main() {
       return r.text();
     };
     res = await TM.buildTransfermarkt(get, { matcher, wdPos, gameName, norm, MIN_REAL, MAX_REAL, allClubs: () => D.CLUBS.flat().map(c => c[0]),
+        clubInfo: () => D.CLUBS.flatMap((l, div) => l.map(c => ({ name: c[0], uf: c[2], div }))),
         saveDebug: (name, html) => { const dir = path.join(__dirname, '../tm-debug'); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, name), html); return dir + '/' + name; } },
       { season: opt('--season', null), leagues: opt('--leagues', 'BRA1,BRA2,BRA3,BRA4').split(',') });
   } else { console.error('--source: auto | transfermarkt | wikidata | apifootball'); process.exit(1); }

@@ -80,22 +80,49 @@ function describe(html) {
 const sleep = ms => new Promise(ok => setTimeout(ok, ms));
 
 // `get(path)` devolve o HTML (ou lança Error com .status). `deps` traz as funções do update-roster.
+// Divisão do jogo (0=A ... 3=D) de cada código de competição do Transfermarkt.
+const DIV_OF = { BRA1: 0, BRA2: 1, BRA3: 2, BRA4: 3 };
+const uf2 = n => { const m = /\s*\(([A-Z]{2})\)\s*$/.exec(n); return m ? m[1] : null; };
+
+/* Associa clubes do Transfermarkt a clubes do jogo.
+ * tmClubs: [{ id, name, div }]  info: [{ name, uf, div }]  exact(name) -> { name } | undefined (nome/alias/sigla)
+ * Regras: UF "(RJ)" no nome tem de bater; a divisão tem de estar a no máximo 1 de distância; nome exato vale
+ * mais que "contém as palavras"; empate = ambíguo -> não associa (melhor sem elenco que com o elenco errado). */
+function resolveClubs(tmClubs, info, { exact, norm, log = () => {} }) {
+  const words = n => norm(n).split(' ').filter(Boolean);
+  const claims = new Map(); // nome do jogo -> [{ tm, key }]
+  for (const tm of tmClubs) {
+    const uf = uf2(tm.name), nm = tm.name.replace(/\s*\([A-Z]{2}\)\s*$/, '');
+    const ex = exact(nm), tw = new Set(words(nm));
+    const cands = [];
+    for (const g of info) {
+      if (uf && uf !== g.uf) continue;
+      const dd = tm.div == null || g.div == null ? 0 : Math.abs(tm.div - g.div);
+      if (dd > 1) continue;
+      const gw = words(g.name.replace(/-[A-Z]{2}$/, ''));
+      const score = ex && ex.name === g.name ? 3 : (gw.length && gw.every(x => tw.has(x)) ? 1 : 0);
+      if (score) cands.push({ g, key: score * 10 - dd * 3 + (uf ? 5 : 0) });
+    }
+    cands.sort((x, y) => y.key - x.key);
+    if (!cands.length) { tm.unmatched = true; continue; }
+    if (cands[1] && cands[1].key === cands[0].key) { log(`  ~ ${tm.name}: ambíguo entre ${cands[0].g.name} e ${cands[1].g.name}; ignorado`); continue; }
+    (claims.get(cands[0].g.name) || claims.set(cands[0].g.name, []).get(cands[0].g.name)).push({ tm, key: cands[0].key });
+  }
+  const out = new Map();
+  for (const [name, list] of claims) {
+    list.sort((x, y) => y.key - x.key);
+    if (list[1] && list[1].key === list[0].key) { log(`  ~ ${name}: ${list.map(x => x.tm.name).join(' e ')} disputam o mesmo clube; ignorado`); continue; }
+    if (list[1]) log(`  = ${name}: usando "${list[0].tm.name}", ignorando "${list.slice(1).map(x => x.tm.name).join('", "')}"`);
+    out.set(name, list[0].tm);
+  }
+  return out;
+}
+
 async function buildTransfermarkt(get, deps, { season = null, leagues = LEAGUES, delayMs = 4000, log = console.log } = {}) {
   // sem `season`, o Transfermarkt usa a temporada atual dele (a numeração dos clubes brasileiros não é o ano civil)
   const { matcher, wdPos, gameName, norm, MIN_REAL, MAX_REAL } = deps;
-  const exact = matcher(), roster = {};
-  // nome exato/alias; senão, clube do jogo cujas palavras estão todas no nome do Transfermarkt (só se for único)
-  const match = name => {
-    const hit = exact(name); if (hit) return hit;
-    const words = new Set(norm(name).split(' '));
-    const found = deps.allClubs().filter(c => {
-      const w = norm(c.replace(/-[A-Z]{2}$/, '')).split(' ').filter(Boolean);
-      return w.length && w.every(x => words.has(x));
-    });
-    const longest = Math.max(0, ...found.map(c => norm(c).split(' ').length));
-    const top = found.filter(c => norm(c).split(' ').length === longest);
-    return top.length === 1 ? { name: top[0] } : undefined;
-  };
+  const info = deps.clubInfo ? deps.clubInfo() : deps.allClubs().map(name => ({ name, uf: null, div: null }));
+  const roster = {};
   const robots = parseRobots(await get('/robots.txt').catch(() => ''));
   const fetchPage = async path => {
     if (!allowed(robots, path)) throw new Error(`robots.txt do Transfermarkt não permite ${path}; abortando`);
@@ -110,6 +137,9 @@ async function buildTransfermarkt(get, deps, { season = null, leagues = LEAGUES,
     `/-/startseite/wettbewerb/${code}/plus/${season ? `?saison_id=${season}` : ''}`,
     `/-/teilnehmer/pokalwettbewerb/${code}${season ? `/saison_id/${season}` : ''}`
   ];
+
+  // 1) clubes de cada competição
+  const tmClubs = [];
   for (const code of leagues) {
     let clubs = [];
     const pages = clubPages(code);
@@ -130,30 +160,37 @@ async function buildTransfermarkt(get, deps, { season = null, leagues = LEAGUES,
           `startseite/verein: ${n(/startseite\/verein\/\d+/g)}; title=: ${n(/\btitle="/g)}; class="items": ${n(/class="items"/g)}` + (file ? `\n    HTML salvo em ${file}` : ''));
       }
     }
-    for (const c of clubs) {
-      const club = match(c.name);
-      if (!club) { log(`  ? sem correspondência: ${c.name} (${code})`); continue; }
-      if (roster[club.name]) { log(`  = ${c.name} (${code}) ignorado: já preenchido como ${club.name}`); continue; }
-      let squad, html;
-      try { html = await fetchPage(`/-/kader/verein/${c.id}/${season ? `saison_id/${season}/` : ''}plus/1`); squad = parseSquad(html); }
-      catch (e) { if (e.status === 403 || e.status === 429 || /robots/.test(e.message)) throw e; log(`  ! ${club.name}: ${e.message}`); continue; }
-      const rows = squad.filter(p => wdPos(p.position)).map(p => [gameName(p.name, ''), wdPos(p.position), p.age || 25]).slice(0, MAX_REAL);
-      if (rows.length < MIN_REAL) {
-        log(`  ! ${club.name}: só ${rows.length} jogadores lidos (layout mudou?)`);
-        if (!debugged && html) {
-          debugged = true;
-          const file = deps.saveDebug ? deps.saveDebug(`${c.id}.html`, html) : null;
-          log(`    diagnóstico da página /kader/verein/${c.id}:\n    ${describe(html)}` + (file ? `\n    HTML completo salvo em ${file}` : ''));
-        }
-        if (++fails >= 3) throw new Error('o parser não achou jogadores em 3 clubes seguidos; abortando para não sobrecarregar o site');
-        continue;
+    for (const c of clubs) if (!tmClubs.some(x => x.id === c.id)) tmClubs.push({ ...c, code, div: DIV_OF[code] ?? null });
+  }
+
+  // 2) quais clubes do Transfermarkt são quais clubes do jogo
+  const assigned = resolveClubs(tmClubs, info, { exact: matcher(), norm, log });
+  const unmatched = tmClubs.filter(c => c.unmatched);
+  const important = unmatched.filter(c => c.div != null && c.div <= 2);
+  if (important.length) log(`  ? sem correspondência no jogo (divisões A-C): ${important.map(c => c.name).join('; ')}`);
+  if (unmatched.length > important.length) log(`  (${unmatched.length - important.length} clubes da Série D não fazem parte do jogo)`);
+
+  // 3) elencos
+  for (const [name, c] of assigned) {
+    let squad, html;
+    try { html = await fetchPage(`/-/kader/verein/${c.id}/${season ? `saison_id/${season}/` : ''}plus/1`); squad = parseSquad(html); }
+    catch (e) { if (e.status === 403 || e.status === 429 || /robots/.test(e.message)) throw e; log(`  ! ${name}: ${e.message}`); continue; }
+    const rows = squad.filter(p => wdPos(p.position)).map(p => [gameName(p.name, ''), wdPos(p.position), p.age || 25]).slice(0, MAX_REAL);
+    if (rows.length < MIN_REAL) {
+      log(`  ! ${name} (${c.name}): só ${rows.length} jogadores lidos`);
+      if (!debugged && html && rows.length === 0) {
+        debugged = true;
+        const file = deps.saveDebug ? deps.saveDebug(`${c.id}.html`, html) : null;
+        log(`    diagnóstico da página /kader/verein/${c.id}:\n    ${describe(html)}` + (file ? `\n    HTML completo salvo em ${file}` : ''));
       }
-      fails = 0;
-      roster[club.name] = rows.sort((a, b) => 'GDMA'.indexOf(a[1]) - 'GDMA'.indexOf(b[1]) || a[0].localeCompare(b[0]));
-      log(`  ${club.name}: ${rows.length} jogadores (${titleOf(html)})`);
+      if (rows.length === 0 && ++fails >= 3) throw new Error('o parser não achou jogadores em 3 clubes seguidos; abortando para não sobrecarregar o site');
+      continue;
     }
+    fails = 0;
+    roster[name] = rows.sort((a, b) => 'GDMA'.indexOf(a[1]) - 'GDMA'.indexOf(b[1]) || a[0].localeCompare(b[0]));
+    log(`  ${name} <- ${c.name}: ${rows.length} jogadores (${titleOf(html)})`);
   }
   return { roster, missing: deps.allClubs().filter(n => !roster[n]) };
 }
 
-module.exports = { parseClubsByText, describe, buildTransfermarkt, parseClubs, parseSquad, parseRobots, allowed };
+module.exports = { resolveClubs, parseClubsByText, describe, buildTransfermarkt, parseClubs, parseSquad, parseRobots, allowed };

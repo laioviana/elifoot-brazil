@@ -93,6 +93,28 @@ const tmGet = async p => {
 const deps = { matcher: U.matcher, norm: U.norm, wdPos: U.wdPos, gameName: U.gameName, MIN_REAL: U.MIN_REAL, MAX_REAL: U.MAX_REAL, allClubs: () => D.CLUBS.flat().map(c => c[0]) };
 
 assert(/linhas odd\/even: 15/.test(TM.describe(squadHtml)));
+// 1e) associação de clubes (casos reais do log do Transfermarkt)
+const info = D.CLUBS.flatMap((l, div) => l.map(c => ({ name: c[0], uf: c[2], div })));
+const resolve = list => {
+  const out = TM.resolveClubs(list.map((c, i) => ({ id: String(i), ...c })), info, { exact: U.matcher(), norm: U.norm });
+  return Object.fromEntries([...out].map(([g, c]) => [g, c.name]));
+};
+let r = resolve([{ name: 'Fluminense EC', div: 3 }, { name: 'Vitória FC', div: 3 }, { name: 'Clube Náutico Marcílio Dias (SC)', div: 3 },
+  { name: 'CE Operário Várzea-Grandense', div: 3 }]);
+assert.deepStrictEqual(r, {});                                   // clubes pequenos homônimos de times de outra divisão
+r = resolve([{ name: 'Sampaio Corrêa Futebol e Esporte (RJ)', div: 3 }, { name: 'Sampaio Corrêa FC (MA)', div: 3 }]);
+assert.deepStrictEqual(r, { 'Sampaio Corrêa': 'Sampaio Corrêa FC (MA)' });   // UF errada é descartada
+r = resolve([{ name: 'AA Portuguesa', div: 3 }, { name: 'Portuguesa', div: 3 }]);
+assert.deepStrictEqual(r, { Portuguesa: 'Portuguesa' });         // nome exato vence "contém as palavras"
+r = resolve([{ name: 'Botafogo FC', div: 2 }]);
+assert.deepStrictEqual(r, { 'Botafogo-PB': 'Botafogo FC' });     // mesma divisão vence; nunca o Botafogo da Série A
+r = resolve([{ name: 'Sport Club Corinthians Paulista', div: 0 }, { name: 'AA Internacional de Limeira', div: 2 },
+  { name: 'Grêmio Esportivo Brasil (RS)', div: 3 }, { name: 'Clube Atlético Mineiro', div: 0 }, { name: 'Sport Club do Recife', div: 1 }]);
+assert.deepStrictEqual(r, { Corinthians: 'Sport Club Corinthians Paulista', 'Inter de Limeira': 'AA Internacional de Limeira',
+  'Brasil de Pelotas': 'Grêmio Esportivo Brasil (RS)', 'Atlético-MG': 'Clube Atlético Mineiro', Sport: 'Sport Club do Recife' });
+r = resolve([{ name: 'Clube de Regatas do Flamengo', div: 0 }]);
+assert.deepStrictEqual(r, { Flamengo: 'Clube de Regatas do Flamengo' });    // palavras do clube dentro de um nome longo
+
 (async () => {
   const tm = await TM.buildTransfermarkt(tmGet, deps, { delayMs: 0, log: () => {} });
   assert.deepStrictEqual(Object.keys(tm.roster), ['Flamengo']);       // "Time Desconhecido" ignorado
