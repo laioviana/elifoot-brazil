@@ -98,6 +98,22 @@ assert(/linhas odd\/even: 15/.test(TM.describe(squadHtml)));
   assert.deepStrictEqual(Object.keys(tm.roster), ['Flamengo']);       // "Time Desconhecido" ignorado
   assert.strictEqual(tm.roster.Flamengo.length, 14);                  // treinador (Manager) descartado
   assert(tm.missing.length === 79);
+  // Séries C/D (tipo "copa"): a página de liga não traz clubes; os da página de participantes são usados
+  const cupLog = [];
+  const cupGet = async p => {
+    cupLog.push(p);
+    if (p === '/robots.txt') return 'User-agent: *\nDisallow: /secret/\n';
+    if (p.includes('wettbewerb/BRA3/plus')) return '<html><title>Campeonato Brasileiro Série C 2026 | Transfermarkt</title></html>';
+    if (p.includes('teilnehmer/pokalwettbewerb/BRA3')) return leagueHtml(999);
+    if (p.includes('/kader/verein/614/')) return squadHtml;
+    return '<html></html>';
+  };
+  const cup = await TM.buildTransfermarkt(cupGet, deps, { delayMs: 0, leagues: ['BRA3'], log: () => {} });
+  assert.deepStrictEqual(Object.keys(cup.roster), ['Flamengo']);
+  assert(cupLog.some(p => p.includes('teilnehmer/pokalwettbewerb/BRA3')));
+  // se o robots.txt proíbe a página de participantes, não aborta a execução inteira: só não lê aquela divisão
+  const noPart = await TM.buildTransfermarkt(async p => (p === '/robots.txt' ? 'User-agent: *\nDisallow: /-/teilnehmer/\n' : '<html></html>'), deps, { delayMs: 0, leagues: ['BRA3'], log: () => {} });
+  assert.strictEqual(Object.keys(noPart.roster).length, 0);
   // parser sem resultados em 3 clubes seguidos: aborta
   const three = ['Flamengo', 'Palmeiras', 'Santos'].map((n, i) => `<a title="${n}" href="/x/startseite/verein/${i + 1}"></a>`).join('');
   const emptyGet = async p => (p === '/robots.txt' ? '' : p.includes('wettbewerb/BRA1') ? three : '<html></html>');

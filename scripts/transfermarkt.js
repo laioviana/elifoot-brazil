@@ -104,22 +104,32 @@ async function buildTransfermarkt(get, deps, { season = null, leagues = LEAGUES,
   };
   let debugged = false, fails = 0;
   const titleOf = html => { const t = /<title>([^<]*)<\/title>/i.exec(html); return t ? decode(t[1]).replace(/\s*\|\s*Transfermarkt.*/, '') : '?'; };
+  // Séries A/B são competições de "liga" no Transfermarkt; C/D são do tipo "copa" (pokalwettbewerb), cujos clubes
+  // ficam na página de participantes. Tenta a de liga e, se não achar clubes, a de participantes.
+  const clubPages = code => [
+    `/-/startseite/wettbewerb/${code}/plus/${season ? `?saison_id=${season}` : ''}`,
+    `/-/teilnehmer/pokalwettbewerb/${code}${season ? `/saison_id/${season}` : ''}`
+  ];
   for (const code of leagues) {
     let clubs = [];
-    try { const html = await fetchPage(`/-/startseite/wettbewerb/${code}/plus/${season ? `?saison_id=${season}` : ''}`); clubs = parseClubs(html); log(`  ${code}: ${titleOf(html)}`);
-      if (!clubs.length) {
-        clubs = parseClubsByText(html);
-        if (clubs.length) log(`  ${code}: clubes lidos pelo texto dos links (${clubs.length})`);
-        else {
-          const n = re => (html.match(re) || []).length;
-          const file = deps.saveDebug ? deps.saveDebug(`liga-${code}.html`, html) : null;
-          log(`  ! ${code}: nenhum clube encontrado. ${html.length} bytes; links /verein/: ${n(/\/verein\/\d+/g)}; startseite/verein: ${n(/startseite\/verein\/\d+/g)}; ` +
-            `title=: ${n(/\btitle="/g)}; class="items": ${n(/class="items"/g)}` + (file ? `\n    HTML salvo em ${file}` : ''));
-        }
+    const pages = clubPages(code);
+    for (let i = 0; i < pages.length && !clubs.length; i++) {
+      let html;
+      try { html = await fetchPage(pages[i]); }
+      catch (e) {
+        if (e.status === 403 || e.status === 429 || (i === 0 && /robots/.test(e.message))) throw e; // bloqueio: para tudo
+        log(`  ! ${code} (${pages[i]}): ${e.message}`); continue;
+      }
+      clubs = parseClubs(html);
+      if (!clubs.length) clubs = parseClubsByText(html);
+      log(`  ${code}: ${titleOf(html)}${i ? ' [página de participantes]' : ''} -> ${clubs.length} clubes`);
+      if (!clubs.length && i === pages.length - 1) {
+        const n = re => (html.match(re) || []).length;
+        const file = deps.saveDebug ? deps.saveDebug(`liga-${code}.html`, html) : null;
+        log(`  ! ${code}: nenhum clube encontrado. ${html.length} bytes; links /verein/: ${n(/\/verein\/\d+/g)}; ` +
+          `startseite/verein: ${n(/startseite\/verein\/\d+/g)}; title=: ${n(/\btitle="/g)}; class="items": ${n(/class="items"/g)}` + (file ? `\n    HTML salvo em ${file}` : ''));
       }
     }
-    catch (e) { if (e.status === 403 || e.status === 429 || /robots/.test(e.message)) throw e; log(`  ! liga ${code}: ${e.message}`); continue; }
-    log(`  ${code}: ${clubs.length} clubes`);
     for (const c of clubs) {
       const club = match(c.name);
       if (!club) { log(`  ? sem correspondência: ${c.name} (${code})`); continue; }
