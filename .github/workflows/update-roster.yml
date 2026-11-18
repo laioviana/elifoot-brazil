@@ -1,40 +1,87 @@
 name: Update roster
+
+# Atualiza js/roster.js toda segunda-feira e abre um PR se algo mudou.
+# Padrão (runner do GitHub): football-data.org, só Série A (secret FOOTBALL_DATA_TOKEN). Os demais clubes mantêm o
+# elenco anterior. O Transfermarkt bloqueia os runners hospedados do GitHub (responde vazio), então ele só funciona
+# num runner self-hosted na sua máquina: crie as variáveis de repositório ROSTER_RUNNER=self-hosted e
+# ROSTER_SOURCE=transfermarkt (Settings → Secrets and variables → Actions → Variables). Se o Transfermarkt falhar,
+# o workflow cai para a football-data.org.
+
 on:
   schedule:
     - cron: '17 6 * * 1'   # toda segunda, 06:17 UTC
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Só buscar e testar; não abrir PR'
+        type: boolean
+        default: false
+
 permissions:
   contents: write
   pull-requests: write
+
+concurrency:
+  group: update-roster
+  cancel-in-progress: false
+
 jobs:
   update:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.ROSTER_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fetch squads (Transfermarkt, falling back to football-data.org)
+
+      - name: Fetch squads
+        id: fetch
+        shell: bash
         timeout-minutes: 30
         env:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+          ROSTER_SOURCE: ${{ vars.ROSTER_SOURCE }}
         run: |
-          if ! node scripts/update-roster.js --source transfermarkt; then
+          if [ "$ROSTER_SOURCE" = "transfermarkt" ]; then
+            if node scripts/update-roster.js --source transfermarkt 2>&1 | tee fetch.log; then
+              echo "source=Transfermarkt" >> "$GITHUB_OUTPUT"; exit 0
+            fi
             echo "::warning::Transfermarkt falhou ou bloqueou o runner; usando football-data.org (só Série A)"
-            node scripts/update-roster.js
           fi
+          node scripts/update-roster.js 2>&1 | tee -a fetch.log
+          echo "source=football-data.org (só Série A)" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Fonte: ${{ steps.fetch.outputs.source || 'falhou' }}"
+            echo '```'
+            tail -n 30 fetch.log 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - run: npm test
+
       - name: Open PR if changed
+        if: ${{ !inputs.dry_run }}
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE: ${{ steps.fetch.outputs.source }}
+          BASE: ${{ github.event.repository.default_branch }}
         run: |
           if git diff --quiet js/roster.js; then echo "Sem mudanças."; exit 0; fi
+          git diff --shortstat js/roster.js
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B roster-update
           git add js/roster.js
-          git commit -m "Atualiza elencos reais (football-data.org)"
+          git commit -m "Atualiza elencos reais ($SOURCE)"
           git push --force -u origin roster-update
-          gh pr create --base "${GITHUB_REF_NAME}" --head roster-update \
-            --title "Atualiza elencos reais" --body "Atualização automática de js/roster.js via scripts/update-roster.js." \
+          gh pr create --base "$BASE" --head roster-update \
+            --title "Atualiza elencos reais" \
+            --body "Atualização automática de js/roster.js. Fonte: $SOURCE. Os testes já rodaram neste workflow (PRs criados pelo GITHUB_TOKEN não disparam o CI)." \
             || echo "PR já existe; branch atualizada."

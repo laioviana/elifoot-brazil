@@ -127,7 +127,10 @@ async function buildTransfermarkt(get, deps, { season = null, leagues = LEAGUES,
   const fetchPage = async path => {
     if (!allowed(robots, path)) throw new Error(`robots.txt do Transfermarkt não permite ${path}; abortando`);
     await sleep(delayMs);
-    return get(path);
+    const html = await get(path);
+    // corpo vazio com status 200 é como o site barra robôs (ex.: runners do GitHub): para na primeira vez
+    if (typeof html === 'string' && !html.trim()) throw Object.assign(new Error(`resposta vazia em ${path} (provável bloqueio de robôs)`), { status: 403 });
+    return html;
   };
   let debugged = false, fails = 0;
   const titleOf = html => { const t = /<title>([^<]*)<\/title>/i.exec(html); return t ? decode(t[1]).replace(/\s*\|\s*Transfermarkt.*/, '') : '?'; };

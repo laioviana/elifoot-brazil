@@ -64,8 +64,26 @@ FOOTBALL_DATA_TOKEN=... npm run update-roster -- --dry   # mostra o resultado se
 FOOTBALL_DATA_TOKEN=... npm run update-roster            # grava js/roster.js
 ```
 
-O workflow `.github/workflows/update-roster.yml` roda toda segunda-feira
-e abre um PR se algo mudou (Settings → Actions → General → permitir que o Actions crie PRs). Para a Série A, crie o secret `FOOTBALL_DATA_TOKEN`.
+### Atualizar à mão (Séries A–D, pelo Transfermarkt)
+
+O Transfermarkt bloqueia os runners do GitHub, então o elenco completo (80 clubes) é atualizado no seu computador, quando quiser:
+
+```bash
+npm run refresh-roster              # atualiza, testa, mostra o que mudou e pergunta antes de criar a branch/PR
+npm run refresh-roster -- --yes     # sem perguntar
+npm run refresh-roster -- --no-pr   # envia a branch mas não abre o PR
+```
+
+Precisa de `node`, `git` com acesso ao repositório e, para abrir o PR sozinho, o GitHub CLI (`brew install gh && gh auth login`).
+O comando exige a árvore de trabalho limpa, atualiza a `main`, busca os elencos (~10 min, 4 s entre as requisições), roda `npm test`,
+e só então cria a branch `roster-update-AAAAMMDD-HHMM`. Se algo falhar, nada é enviado e o arquivo volta ao que era.
+Se o Transfermarkt falhar e `FOOTBALL_DATA_TOKEN` estiver definido, usa a football-data.org (só Série A).
+
+O workflow `.github/workflows/update-roster.yml` roda toda segunda-feira (e sob demanda em Actions → Update roster → Run
+workflow; marque *dry_run* para testar sem abrir PR). Ele busca no Transfermarkt e, se o site bloquear o runner do GitHub,
+cai para a football-data.org (só Série A, secret `FOOTBALL_DATA_TOKEN`). Se algo mudou, abre o PR `roster-update` para
+revisão. Requisitos únicos: Settings → Actions → General → *Allow GitHub Actions to create and approve pull requests*.
+GitHub desativa workflows agendados após 60 dias sem atividade no repositório.
 Com a API-Football, se o nome de um clube não casar com `js/data.js`, o script avisa; ajuste o `ALIAS` no topo do script. As divisões
 refletem aproximadamente a temporada 2026 (a Série D foi reduzida a 20 clubes).
 

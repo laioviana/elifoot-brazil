@@ -309,13 +309,17 @@ async function main() {
       { season: opt('--season', null), leagues: opt('--leagues', 'BRA1,BRA2,BRA3,BRA4').split(',') });
   } else { console.error('--source: auto | transfermarkt | wikidata | apifootball'); process.exit(1); }
 
-  const { roster, missing } = res;
-  console.log(`${Object.keys(roster).length} clubes atualizados; ${missing.length} sem elenco real: ${missing.join(', ') || '-'}`);
+  const { roster } = res;
+  const names = D.CLUBS.flat().map(c => c[0]);
+  const updated = Object.keys(roster).length;
   // Segurança: se quase nada veio, não sobrescreve um arquivo bom.
-  if (Object.keys(roster).length < minClubs) { console.error('Poucos clubes retornados; abortando sem gravar.'); process.exit(2); }
+  if (updated < minClubs) { console.error(`Poucos clubes retornados (${updated}); abortando sem gravar.`); process.exit(2); }
   // Clubes que a fonte não devolveu agora mantêm o elenco anterior.
   const prev = require('../js/roster.js');
-  for (const k of Object.keys(prev)) if (!roster[k] && D.CLUBS.flat().some(c => c[0] === k)) roster[k] = prev[k];
+  for (const k of Object.keys(prev)) if (!roster[k] && names.includes(k)) roster[k] = prev[k];
+  const stillMissing = names.filter(n => !roster[n]);
+  console.log(`${updated} clubes atualizados agora; ${names.length - stillMissing.length}/${names.length} com elenco real` +
+    (stillMissing.length ? `; sem elenco real (nomes gerados): ${stillMissing.join(', ')}` : ''));
   if (!args.includes('--dry')) fs.writeFileSync(path.join(__dirname, '../js/roster.js'), render(roster));
 }
 
