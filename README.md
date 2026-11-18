@@ -43,7 +43,30 @@ npm test         # simula 6 temporadas e valida o motor
 | `css/style.css` | visual 8-bit |
 | `test/sim.test.js` | simulação headless de várias temporadas |
 
-Os clubes são reais; **todos os jogadores são fictícios** e gerados aleatoriamente. As divisões
+Os clubes são reais. Os jogadores usam **elencos reais** (nome, posição e idade) de `js/roster.js` quando o clube
+consta lá; a força de cada jogador continua derivada da força do clube. Clubes sem elenco real, vagas que faltam
+e as revelações da base usam nomes fictícios gerados.
+
+### Elencos reais
+
+`js/roster.js` é gerado por `scripts/update-roster.js`, só com fontes gratuitas:
+
+- **Série A** — [football-data.org](https://www.football-data.org/client/register) (token grátis): elencos atuais.
+- **Todas as divisões (opcional)** — `--source transfermarkt` lê os elencos atuais do Transfermarkt (veja o aviso sobre
+  termos de uso em `scripts/transfermarkt.js`). O workflow semanal tenta o Transfermarkt primeiro e, se for bloqueado,
+  cai para a football-data.org. Os runners do GitHub costumam ser bloqueados; se acontecer, rode localmente.
+- **Séries B–D sem Transfermarkt** — nomes gerados. Não há fonte gratuita confiável: a Wikidata não registra datas de início/fim
+  de vínculo na maioria dos casos e mistura ex-jogadores. Dá para testar com `--with-wikidata`
+  (`--recent-years N` filtra por data de início; `0` desliga o filtro, trazendo ex-jogadores).
+
+```bash
+FOOTBALL_DATA_TOKEN=... npm run update-roster -- --dry   # mostra o resultado sem gravar
+FOOTBALL_DATA_TOKEN=... npm run update-roster            # grava js/roster.js
+```
+
+O workflow `.github/workflows/update-roster.yml` roda toda segunda-feira
+e abre um PR se algo mudou (Settings → Actions → General → permitir que o Actions crie PRs). Para a Série A, crie o secret `FOOTBALL_DATA_TOKEN`.
+Com a API-Football, se o nome de um clube não casar com `js/data.js`, o script avisa; ajuste o `ALIAS` no topo do script. As divisões
 refletem aproximadamente a temporada 2026 (a Série D foi reduzida a 20 clubes).
 
 ## Publicação
