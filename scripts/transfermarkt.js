@@ -175,6 +175,8 @@ async function buildTransfermarkt(get, deps, { season = null, leagues = LEAGUES,
     let squad, html;
     try { html = await fetchPage(`/-/kader/verein/${c.id}/${season ? `saison_id/${season}/` : ''}plus/1`); squad = parseSquad(html); }
     catch (e) { if (e.status === 403 || e.status === 429 || /robots/.test(e.message)) throw e; log(`  ! ${name}: ${e.message}`); continue; }
+    const dropped = squad.filter(p => !wdPos(p.position));
+    if (dropped.length) log(`  i ${name}: ${dropped.length} jogadores sem posição reconhecida (${[...new Set(dropped.map(p => p.position || '(vazio)'))].join(', ')})`);
     const rows = squad.filter(p => wdPos(p.position)).map(p => [gameName(p.name, ''), wdPos(p.position), p.age || 25]).slice(0, MAX_REAL);
     if (rows.length < MIN_REAL) {
       log(`  ! ${name} (${c.name}): só ${rows.length} jogadores lidos`);

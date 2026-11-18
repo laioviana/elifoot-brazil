@@ -28,7 +28,7 @@ const ALIAS = {
   'sport recife': 'Sport', 'ceara': 'Ceará', 'botafogo sp': 'Botafogo-SP', 'botafogo pb': 'Botafogo-PB',
   'america mg': 'América-MG', 'america rn': 'América-RN', 'athletic club': 'Athletic-MG', 'barra fc': 'Barra-SC',
   'sport club corinthians paulista': 'Corinthians', 'botafogo de futebol e regatas': 'Botafogo', 'clube atletico mineiro': 'Atlético-MG',
-  'sport club internacional': 'Internacional', 'aa internacional de limeira': 'Inter de Limeira', 'gremio esportivo brasil': 'Brasil de Pelotas', 'sport club do recife': 'Sport', 'gremio novorizontino': 'Novorizontino', 'clube de regatas brasil al': 'CRB',
+  'sport club internacional': 'Internacional', 'aa internacional de limeira': 'Inter de Limeira', 'gremio esportivo brasil': 'Brasil de Pelotas', 'sport club do recife': 'Sport', 'gremio novorizontino': 'Novorizontino', 'clube de regatas brasil al': 'CRB', 'clube de regatas brasil': 'CRB',
   'atletico clube goianiense': 'Atlético-GO', 'mineiro': 'Atlético-MG', 'paranaense': 'Athletico-PR', 'clube do remo': 'Remo', 'sao bernardo': 'São Bernardo', 'inter de limeira': 'Inter de Limeira', 'maranhao': 'Maranhão'
 };
 
@@ -98,7 +98,7 @@ const wdPos = l => {
   return null;
 };
 const MAX_REAL = 30; // elenco máximo importado por clube
-const MIN_REAL = 11; // abaixo disso o clube fica com nomes gerados
+const MIN_REAL = 10; // abaixo disso o clube fica com nomes gerados
 const qid = u => u.slice(u.lastIndexOf('/') + 1);
 
 // Nome de jogo: apelido (P1449) se houver; senão o rótulo, encurtado para "Primeiro Último" quando longo.

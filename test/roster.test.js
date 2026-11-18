@@ -11,6 +11,7 @@ assert.strictEqual(m('Athletico Paranaense').name, 'Athletico-PR');
 assert.strictEqual(m('Atletico-MG').name, 'Atlético-MG');
 assert.strictEqual(m('Sao Paulo').name, 'São Paulo');
 assert.strictEqual(m('Ceará SC').name, 'Ceará');
+assert.strictEqual(m('Clube de Regatas Brasil').name, 'CRB');
 assert.strictEqual(m('CA Mineiro').name, 'Atlético-MG');
 assert.strictEqual(m('Sport Club Corinthians Paulista').name, 'Corinthians');
 assert.strictEqual(m('Clube de Regatas Brasil (AL)').name, 'CRB');
