@@ -10,6 +10,8 @@ assert.strictEqual(m('Red Bull Bragantino').name, 'Bragantino');
 assert.strictEqual(m('Athletico Paranaense').name, 'Athletico-PR');
 assert.strictEqual(m('Atletico-MG').name, 'Atlético-MG');
 assert.strictEqual(m('Sao Paulo').name, 'São Paulo');
+assert.strictEqual(U.wdPos('Defender'), 'D');
+assert.strictEqual(U.wdPos('Defensive Midfield'), 'M');
 assert.strictEqual(m('Ceará SC').name, 'Ceará');
 assert.strictEqual(m('Clube de Regatas Brasil').name, 'CRB');
 assert.strictEqual(m('CA Mineiro').name, 'Atlético-MG');

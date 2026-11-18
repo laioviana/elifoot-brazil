@@ -92,7 +92,7 @@ const playersQuery = ids => `SELECT ?club ?p ?pt ?en ?nick ?dob ?posl ?start WHE
 const wdPos = l => {
   l = (l || '').toLowerCase();
   if (/goalkeeper/.test(l)) return 'G';
-  if (/back|defen[cs]e|sweeper/.test(l)) return 'D';
+  if (/back|defen[cs]e|defender|sweeper/.test(l)) return 'D';
   if (/midfield|playmaker/.test(l)) return 'M';
   if (/forward|striker|winger|attack|offence/.test(l)) return 'A';
   return null;
