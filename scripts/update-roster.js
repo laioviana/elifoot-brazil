@@ -28,7 +28,7 @@ const ALIAS = {
   'sport recife': 'Sport', 'ceara': 'Ceará', 'botafogo sp': 'Botafogo-SP', 'botafogo pb': 'Botafogo-PB',
   'america mg': 'América-MG', 'america rn': 'América-RN', 'athletic club': 'Athletic-MG', 'barra fc': 'Barra-SC',
   'sport club corinthians paulista': 'Corinthians', 'botafogo de futebol e regatas': 'Botafogo', 'clube atletico mineiro': 'Atlético-MG',
-  'sport club internacional': 'Internacional', 'gremio novorizontino': 'Novorizontino', 'clube de regatas brasil al': 'CRB',
+  'sport club internacional': 'Internacional', 'aa internacional de limeira': 'Inter de Limeira', 'gremio esportivo brasil': 'Brasil de Pelotas', 'sport club do recife': 'Sport', 'gremio novorizontino': 'Novorizontino', 'clube de regatas brasil al': 'CRB', 'clube de regatas brasil': 'CRB',
   'atletico clube goianiense': 'Atlético-GO', 'mineiro': 'Atlético-MG', 'paranaense': 'Athletico-PR', 'clube do remo': 'Remo', 'sao bernardo': 'São Bernardo', 'inter de limeira': 'Inter de Limeira', 'maranhao': 'Maranhão'
 };
 
@@ -92,13 +92,13 @@ const playersQuery = ids => `SELECT ?club ?p ?pt ?en ?nick ?dob ?posl ?start WHE
 const wdPos = l => {
   l = (l || '').toLowerCase();
   if (/goalkeeper/.test(l)) return 'G';
-  if (/back|defen[cs]e|sweeper/.test(l)) return 'D';
+  if (/back|defen[cs]e|defender|sweeper/.test(l)) return 'D';
   if (/midfield|playmaker/.test(l)) return 'M';
   if (/forward|striker|winger|attack|offence/.test(l)) return 'A';
   return null;
 };
 const MAX_REAL = 30; // elenco máximo importado por clube
-const MIN_REAL = 11; // abaixo disso o clube fica com nomes gerados
+const MIN_REAL = 10; // abaixo disso o clube fica com nomes gerados
 const qid = u => u.slice(u.lastIndexOf('/') + 1);
 
 // Nome de jogo: apelido (P1449) se houver; senão o rótulo, encurtado para "Primeiro Último" quando longo.
@@ -303,6 +303,8 @@ async function main() {
       return r.text();
     };
     res = await TM.buildTransfermarkt(get, { matcher, wdPos, gameName, norm, MIN_REAL, MAX_REAL, allClubs: () => D.CLUBS.flat().map(c => c[0]),
+        idOverrides: JSON.parse(fs.readFileSync(path.join(__dirname, 'transfermarkt-ids.json'), 'utf8')),
+        clubInfo: () => D.CLUBS.flatMap((l, div) => l.map(c => ({ name: c[0], uf: c[2], div }))),
         saveDebug: (name, html) => { const dir = path.join(__dirname, '../tm-debug'); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, name), html); return dir + '/' + name; } },
       { season: opt('--season', null), leagues: opt('--leagues', 'BRA1,BRA2,BRA3,BRA4').split(',') });
   } else { console.error('--source: auto | transfermarkt | wikidata | apifootball'); process.exit(1); }

@@ -10,7 +10,10 @@ assert.strictEqual(m('Red Bull Bragantino').name, 'Bragantino');
 assert.strictEqual(m('Athletico Paranaense').name, 'Athletico-PR');
 assert.strictEqual(m('Atletico-MG').name, 'Atlético-MG');
 assert.strictEqual(m('Sao Paulo').name, 'São Paulo');
+assert.strictEqual(U.wdPos('Defender'), 'D');
+assert.strictEqual(U.wdPos('Defensive Midfield'), 'M');
 assert.strictEqual(m('Ceará SC').name, 'Ceará');
+assert.strictEqual(m('Clube de Regatas Brasil').name, 'CRB');
 assert.strictEqual(m('CA Mineiro').name, 'Atlético-MG');
 assert.strictEqual(m('Sport Club Corinthians Paulista').name, 'Corinthians');
 assert.strictEqual(m('Clube de Regatas Brasil (AL)').name, 'CRB');
@@ -93,15 +96,59 @@ const tmGet = async p => {
 const deps = { matcher: U.matcher, norm: U.norm, wdPos: U.wdPos, gameName: U.gameName, MIN_REAL: U.MIN_REAL, MAX_REAL: U.MAX_REAL, allClubs: () => D.CLUBS.flat().map(c => c[0]) };
 
 assert(/linhas odd\/even: 15/.test(TM.describe(squadHtml)));
+// 1e) associação de clubes (casos reais do log do Transfermarkt)
+const info = D.CLUBS.flatMap((l, div) => l.map(c => ({ name: c[0], uf: c[2], div })));
+const resolve = list => {
+  const out = TM.resolveClubs(list.map((c, i) => ({ id: String(i), ...c })), info, { exact: U.matcher(), norm: U.norm });
+  return Object.fromEntries([...out].map(([g, c]) => [g, c.name]));
+};
+let r = resolve([{ name: 'Fluminense EC', div: 3 }, { name: 'Vitória FC', div: 3 }, { name: 'Clube Náutico Marcílio Dias (SC)', div: 3 },
+  { name: 'CE Operário Várzea-Grandense', div: 3 }]);
+assert.deepStrictEqual(r, {});                                   // clubes pequenos homônimos de times de outra divisão
+r = resolve([{ name: 'Sampaio Corrêa Futebol e Esporte (RJ)', div: 3 }, { name: 'Sampaio Corrêa FC (MA)', div: 3 }]);
+assert.deepStrictEqual(r, { 'Sampaio Corrêa': 'Sampaio Corrêa FC (MA)' });   // UF errada é descartada
+r = resolve([{ name: 'AA Portuguesa', div: 3 }, { name: 'Portuguesa', div: 3 }]);
+assert.deepStrictEqual(r, { Portuguesa: 'Portuguesa' });         // nome exato vence "contém as palavras"
+r = resolve([{ name: 'Botafogo FC', div: 2 }]);
+assert.deepStrictEqual(r, { 'Botafogo-PB': 'Botafogo FC' });     // mesma divisão vence; nunca o Botafogo da Série A
+r = resolve([{ name: 'Sport Club Corinthians Paulista', div: 0 }, { name: 'AA Internacional de Limeira', div: 2 },
+  { name: 'Grêmio Esportivo Brasil (RS)', div: 3 }, { name: 'Clube Atlético Mineiro', div: 0 }, { name: 'Sport Club do Recife', div: 1 }]);
+assert.deepStrictEqual(r, { Corinthians: 'Sport Club Corinthians Paulista', 'Inter de Limeira': 'AA Internacional de Limeira',
+  'Brasil de Pelotas': 'Grêmio Esportivo Brasil (RS)', 'Atlético-MG': 'Clube Atlético Mineiro', Sport: 'Sport Club do Recife' });
+r = resolve([{ name: 'Clube de Regatas do Flamengo', div: 0 }]);
+assert.deepStrictEqual(r, { Flamengo: 'Clube de Regatas do Flamengo' });    // palavras do clube dentro de um nome longo
+
 (async () => {
   const tm = await TM.buildTransfermarkt(tmGet, deps, { delayMs: 0, log: () => {} });
   assert.deepStrictEqual(Object.keys(tm.roster), ['Flamengo']);       // "Time Desconhecido" ignorado
   assert.strictEqual(tm.roster.Flamengo.length, 14);                  // treinador (Manager) descartado
   assert(tm.missing.length === 79);
+  // Séries C/D (tipo "copa"): a página de liga não traz clubes; os da página de participantes são usados
+  const cupLog = [];
+  const cupGet = async p => {
+    cupLog.push(p);
+    if (p === '/robots.txt') return 'User-agent: *\nDisallow: /secret/\n';
+    if (p.includes('wettbewerb/BRA3/plus')) return '<html><title>Campeonato Brasileiro Série C 2026 | Transfermarkt</title></html>';
+    if (p.includes('teilnehmer/pokalwettbewerb/BRA3')) return leagueHtml(999);
+    if (p.includes('/kader/verein/614/')) return squadHtml;
+    return '<html></html>';
+  };
+  const cup = await TM.buildTransfermarkt(cupGet, deps, { delayMs: 0, leagues: ['BRA3'], log: () => {} });
+  assert.deepStrictEqual(Object.keys(cup.roster), ['Flamengo']);
+  assert(cupLog.some(p => p.includes('teilnehmer/pokalwettbewerb/BRA3')));
+  // se o robots.txt proíbe a página de participantes, não aborta a execução inteira: só não lê aquela divisão
+  const noPart = await TM.buildTransfermarkt(async p => (p === '/robots.txt' ? 'User-agent: *\nDisallow: /-/teilnehmer/\n' : '<html></html>'), deps, { delayMs: 0, leagues: ['BRA3'], log: () => {} });
+  assert.strictEqual(Object.keys(noPart.roster).length, 0);
   // parser sem resultados em 3 clubes seguidos: aborta
   const three = ['Flamengo', 'Palmeiras', 'Santos'].map((n, i) => `<a title="${n}" href="/x/startseite/verein/${i + 1}"></a>`).join('');
   const emptyGet = async p => (p === '/robots.txt' ? '' : p.includes('wettbewerb/BRA1') ? three : '<html></html>');
   await assert.rejects(TM.buildTransfermarkt(emptyGet, { ...deps, saveDebug: () => 'x' }, { delayMs: 0, log: () => {} }), /3 clubes seguidos/);
+  // ids fixados à mão: leem o clube mesmo sem ele aparecer nas listas, e vencem a associação por nome
+  const ovLog = [];
+  const ovGet = async p => { ovLog.push(p); return p === '/robots.txt' ? '' : p.includes('/kader/verein/9030/') ? squadHtml : '<html></html>'; };
+  const ov = await TM.buildTransfermarkt(ovGet, { ...deps, idOverrides: { 'Botafogo-SP': 9030, 'Clube Que Nao Existe': 1 } }, { delayMs: 0, leagues: [], log: () => {} });
+  assert.deepStrictEqual(Object.keys(ov.roster), ['Botafogo-SP']);
+  assert(ovLog.some(p => p.includes('/kader/verein/9030/')));
   // bloqueio (403): para tudo em vez de insistir
   await assert.rejects(TM.buildTransfermarkt(async p => { if (p === '/robots.txt') return ''; throw Object.assign(new Error('403'), { status: 403 }); }, deps, { delayMs: 0, log: () => {} }));
   // robots.txt proibindo o caminho: para
