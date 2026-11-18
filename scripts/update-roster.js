@@ -4,7 +4,8 @@
  *   FOOTBALL_DATA_TOKEN=xxxx node scripts/update-roster.js [--dry]     (padrão: --source auto)
  *     auto = Série A pela football-data.org (grátis, elencos atuais)
  *     --with-wikidata [--recent-years N] = tenta preencher Séries B-D pela Wikidata (dados duvidosos)
- *   node scripts/update-roster.js --source transfermarkt [--dry]   (raspa o site; veja scripts/transfermarkt.js)
+ *   node scripts/update-roster.js --source transfermarkt [--dry] [--leagues BRA1,BRA2,...] [--season N]
+ *     (raspa o site; veja scripts/transfermarkt.js. Sem --season usa a temporada atual do próprio site)
  *   node scripts/update-roster.js --source wikidata [--dry]
  *   API_FOOTBALL_KEY=xxxx node scripts/update-roster.js --source apifootball [--season 2026] [--dry]
  *
@@ -303,7 +304,7 @@ async function main() {
     };
     res = await TM.buildTransfermarkt(get, { matcher, wdPos, gameName, norm, MIN_REAL, MAX_REAL, allClubs: () => D.CLUBS.flat().map(c => c[0]),
         saveDebug: (name, html) => { const dir = path.join(__dirname, '../tm-debug'); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, name), html); return dir + '/' + name; } },
-      { season: Number(opt('--season', new Date().getFullYear())) });
+      { season: opt('--season', null), leagues: opt('--leagues', 'BRA1,BRA2,BRA3,BRA4').split(',') });
   } else { console.error('--source: auto | transfermarkt | wikidata | apifootball'); process.exit(1); }
 
   const { roster, missing } = res;

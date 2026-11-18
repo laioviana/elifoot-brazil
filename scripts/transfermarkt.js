@@ -69,7 +69,8 @@ function describe(html) {
 const sleep = ms => new Promise(ok => setTimeout(ok, ms));
 
 // `get(path)` devolve o HTML (ou lança Error com .status). `deps` traz as funções do update-roster.
-async function buildTransfermarkt(get, deps, { season = new Date().getFullYear(), delayMs = 4000, log = console.log } = {}) {
+async function buildTransfermarkt(get, deps, { season = null, leagues = LEAGUES, delayMs = 4000, log = console.log } = {}) {
+  // sem `season`, o Transfermarkt usa a temporada atual dele (a numeração dos clubes brasileiros não é o ano civil)
   const { matcher, wdPos, gameName, norm, MIN_REAL, MAX_REAL } = deps;
   const exact = matcher(), roster = {};
   // nome exato/alias; senão, clube do jogo cujas palavras estão todas no nome do Transfermarkt (só se for único)
@@ -91,9 +92,10 @@ async function buildTransfermarkt(get, deps, { season = new Date().getFullYear()
     return get(path);
   };
   let debugged = false, fails = 0;
-  for (const code of LEAGUES) {
+  const titleOf = html => { const t = /<title>([^<]*)<\/title>/i.exec(html); return t ? decode(t[1]).replace(/\s*\|\s*Transfermarkt.*/, '') : '?'; };
+  for (const code of leagues) {
     let clubs = [];
-    try { clubs = parseClubs(await fetchPage(`/-/startseite/wettbewerb/${code}/plus/?saison_id=${season}`)); }
+    try { const html = await fetchPage(`/-/startseite/wettbewerb/${code}/plus/${season ? `?saison_id=${season}` : ''}`); clubs = parseClubs(html); log(`  ${code}: ${titleOf(html)}`); }
     catch (e) { if (e.status === 403 || e.status === 429 || /robots/.test(e.message)) throw e; log(`  ! liga ${code}: ${e.message}`); continue; }
     log(`  ${code}: ${clubs.length} clubes`);
     for (const c of clubs) {
@@ -101,7 +103,7 @@ async function buildTransfermarkt(get, deps, { season = new Date().getFullYear()
       if (!club) { log(`  ? sem correspondência: ${c.name} (${code})`); continue; }
       if (roster[club.name]) continue;
       let squad, html;
-      try { html = await fetchPage(`/-/kader/verein/${c.id}/saison_id/${season}/plus/1`); squad = parseSquad(html); }
+      try { html = await fetchPage(`/-/kader/verein/${c.id}/${season ? `saison_id/${season}/` : ''}plus/1`); squad = parseSquad(html); }
       catch (e) { if (e.status === 403 || e.status === 429 || /robots/.test(e.message)) throw e; log(`  ! ${club.name}: ${e.message}`); continue; }
       const rows = squad.filter(p => wdPos(p.position)).map(p => [gameName(p.name, ''), wdPos(p.position), p.age || 25]).slice(0, MAX_REAL);
       if (rows.length < MIN_REAL) {
@@ -116,7 +118,7 @@ async function buildTransfermarkt(get, deps, { season = new Date().getFullYear()
       }
       fails = 0;
       roster[club.name] = rows.sort((a, b) => 'GDMA'.indexOf(a[1]) - 'GDMA'.indexOf(b[1]) || a[0].localeCompare(b[0]));
-      log(`  ${club.name}: ${rows.length} jogadores`);
+      log(`  ${club.name}: ${rows.length} jogadores (${titleOf(html)})`);
     }
   }
   return { roster, missing: deps.allClubs().filter(n => !roster[n]) };
