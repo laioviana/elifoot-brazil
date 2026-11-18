@@ -43,6 +43,17 @@ function parseClubs(html) {
   return [...out].map(([id, name]) => ({ id, name }));
 }
 
+// Plano B para páginas que listam os clubes sem o atributo title (ex.: divisões menores): usa o texto do link.
+function parseClubsByText(html) {
+  const out = new Map();
+  for (const m of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)) {
+    const id = /\/(?:startseite|spielplan|kader)\/verein\/(\d+)/.exec(m[1]);
+    const text = decode(m[2].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' '));
+    if (id && text && text.length > 1 && !out.has(id[1])) out.set(id[1], text);
+  }
+  return [...out].map(([id, name]) => ({ id, name }));
+}
+
 // Página do elenco (visão detalhada "plus/1") -> [{ name, position, age }]
 function parseSquad(html) {
   const players = [];
@@ -95,13 +106,24 @@ async function buildTransfermarkt(get, deps, { season = null, leagues = LEAGUES,
   const titleOf = html => { const t = /<title>([^<]*)<\/title>/i.exec(html); return t ? decode(t[1]).replace(/\s*\|\s*Transfermarkt.*/, '') : '?'; };
   for (const code of leagues) {
     let clubs = [];
-    try { const html = await fetchPage(`/-/startseite/wettbewerb/${code}/plus/${season ? `?saison_id=${season}` : ''}`); clubs = parseClubs(html); log(`  ${code}: ${titleOf(html)}`); }
+    try { const html = await fetchPage(`/-/startseite/wettbewerb/${code}/plus/${season ? `?saison_id=${season}` : ''}`); clubs = parseClubs(html); log(`  ${code}: ${titleOf(html)}`);
+      if (!clubs.length) {
+        clubs = parseClubsByText(html);
+        if (clubs.length) log(`  ${code}: clubes lidos pelo texto dos links (${clubs.length})`);
+        else {
+          const n = re => (html.match(re) || []).length;
+          const file = deps.saveDebug ? deps.saveDebug(`liga-${code}.html`, html) : null;
+          log(`  ! ${code}: nenhum clube encontrado. ${html.length} bytes; links /verein/: ${n(/\/verein\/\d+/g)}; startseite/verein: ${n(/startseite\/verein\/\d+/g)}; ` +
+            `title=: ${n(/\btitle="/g)}; class="items": ${n(/class="items"/g)}` + (file ? `\n    HTML salvo em ${file}` : ''));
+        }
+      }
+    }
     catch (e) { if (e.status === 403 || e.status === 429 || /robots/.test(e.message)) throw e; log(`  ! liga ${code}: ${e.message}`); continue; }
     log(`  ${code}: ${clubs.length} clubes`);
     for (const c of clubs) {
       const club = match(c.name);
       if (!club) { log(`  ? sem correspondência: ${c.name} (${code})`); continue; }
-      if (roster[club.name]) continue;
+      if (roster[club.name]) { log(`  = ${c.name} (${code}) ignorado: já preenchido como ${club.name}`); continue; }
       let squad, html;
       try { html = await fetchPage(`/-/kader/verein/${c.id}/${season ? `saison_id/${season}/` : ''}plus/1`); squad = parseSquad(html); }
       catch (e) { if (e.status === 403 || e.status === 429 || /robots/.test(e.message)) throw e; log(`  ! ${club.name}: ${e.message}`); continue; }
@@ -124,4 +146,4 @@ async function buildTransfermarkt(get, deps, { season = null, leagues = LEAGUES,
   return { roster, missing: deps.allClubs().filter(n => !roster[n]) };
 }
 
-module.exports = { describe, buildTransfermarkt, parseClubs, parseSquad, parseRobots, allowed };
+module.exports = { parseClubsByText, describe, buildTransfermarkt, parseClubs, parseSquad, parseRobots, allowed };

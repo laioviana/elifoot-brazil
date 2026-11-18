@@ -77,6 +77,9 @@ const row = (cls, n, pos, dob) => `<tr class="${cls}"><td class="zentriert">1</t
 const squadHtml = '<tbody>' + Array.from({ length: 14 }, (_, i) => row(i % 2 ? 'odd' : 'even', `Jogador &amp; ${i}`,
   ['Goalkeeper', 'Centre-Back', 'Defensive Midfield', 'Left Winger'][i % 4], '26/09/1998 (27)')).join('') + row('odd', 'Sem Posição', 'Manager', '01/01/1970 (56)') + '</tbody>';
 assert.deepStrictEqual(TM.parseClubs(leagueHtml(999)).map(c => c.id), ['614', '999']);
+const noTitle = '<table class="items"><tr><td><a href="/ceara/startseite/verein/2029"><img></a></td><td><a href="/ceara/startseite/verein/2029">Ceará Sporting Club</a></td></tr></table>';
+assert.deepStrictEqual(TM.parseClubs(noTitle), []);
+assert.deepStrictEqual(TM.parseClubsByText(noTitle), [{ id: '2029', name: 'Ceará Sporting Club' }]);
 const ps = TM.parseSquad(squadHtml);
 assert.strictEqual(ps.length, 15);
 assert.deepStrictEqual(ps[0], { name: 'Jogador & 0', position: 'Goalkeeper', age: 27 });
