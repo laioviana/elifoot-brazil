@@ -26,7 +26,9 @@ const ALIAS = {
   'vasco da gama': 'Vasco', 'atletico goianiense': 'Atlético-GO', 'operario': 'Operário-PR', 'ec vitoria': 'Vitória',
   'sport recife': 'Sport', 'ceara': 'Ceará', 'botafogo sp': 'Botafogo-SP', 'botafogo pb': 'Botafogo-PB',
   'america mg': 'América-MG', 'america rn': 'América-RN', 'athletic club': 'Athletic-MG', 'barra fc': 'Barra-SC',
-  'mineiro': 'Atlético-MG', 'paranaense': 'Athletico-PR', 'clube do remo': 'Remo', 'sao bernardo': 'São Bernardo', 'inter de limeira': 'Inter de Limeira', 'maranhao': 'Maranhão'
+  'sport club corinthians paulista': 'Corinthians', 'botafogo de futebol e regatas': 'Botafogo', 'clube atletico mineiro': 'Atlético-MG',
+  'sport club internacional': 'Internacional', 'gremio novorizontino': 'Novorizontino', 'clube de regatas brasil al': 'CRB',
+  'atletico clube goianiense': 'Atlético-GO', 'mineiro': 'Atlético-MG', 'paranaense': 'Athletico-PR', 'clube do remo': 'Remo', 'sao bernardo': 'São Bernardo', 'inter de limeira': 'Inter de Limeira', 'maranhao': 'Maranhão'
 };
 
 const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -299,7 +301,8 @@ async function main() {
       if (!r.ok) { const e = new Error(`Transfermarkt ${r.status} em ${p}`); e.status = r.status; throw e; }
       return r.text();
     };
-    res = await TM.buildTransfermarkt(get, { matcher, wdPos, gameName, norm, MIN_REAL, MAX_REAL, allClubs: () => D.CLUBS.flat().map(c => c[0]) },
+    res = await TM.buildTransfermarkt(get, { matcher, wdPos, gameName, norm, MIN_REAL, MAX_REAL, allClubs: () => D.CLUBS.flat().map(c => c[0]),
+        saveDebug: (name, html) => { const dir = path.join(__dirname, '../tm-debug'); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, name), html); return dir + '/' + name; } },
       { season: Number(opt('--season', new Date().getFullYear())) });
   } else { console.error('--source: auto | transfermarkt | wikidata | apifootball'); process.exit(1); }
 

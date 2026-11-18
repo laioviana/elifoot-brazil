@@ -56,6 +56,16 @@ function parseSquad(html) {
   return players;
 }
 
+// Resumo do que veio na página, para diagnosticar quando o parser não encontra jogadores.
+function describe(html) {
+  const c = re => (html.match(re) || []).length;
+  const row = /<tr class="(?:odd|even)"[^>]*>[\s\S]{0,1200}/.exec(html);
+  const title = /<title>([^<]*)<\/title>/i.exec(html);
+  return [`${html.length} bytes; título: ${title ? decode(title[1]).slice(0, 80) : '(sem título)'}`,
+    `class="items": ${c(/class="items"/g)}; linhas odd/even: ${c(/<tr class="(?:odd|even)"/g)}; hauptlink: ${c(/class="hauptlink/g)}; ` +
+    `inline-table: ${c(/inline-table/g)}; "profil/spieler": ${c(/profil\/spieler/g)}; consentimento/captcha: ${c(/consent|captcha|cf-chl|challenge/gi)}`,
+    row ? 'primeira linha: ' + row[0].replace(/\s+/g, ' ').slice(0, 900) : 'nenhuma linha odd/even encontrada'].join('\n    ');
+}
 const sleep = ms => new Promise(ok => setTimeout(ok, ms));
 
 // `get(path)` devolve o HTML (ou lança Error com .status). `deps` traz as funções do update-roster.
@@ -80,6 +90,7 @@ async function buildTransfermarkt(get, deps, { season = new Date().getFullYear()
     await sleep(delayMs);
     return get(path);
   };
+  let debugged = false, fails = 0;
   for (const code of LEAGUES) {
     let clubs = [];
     try { clubs = parseClubs(await fetchPage(`/-/startseite/wettbewerb/${code}/plus/?saison_id=${season}`)); }
@@ -89,11 +100,21 @@ async function buildTransfermarkt(get, deps, { season = new Date().getFullYear()
       const club = match(c.name);
       if (!club) { log(`  ? sem correspondência: ${c.name} (${code})`); continue; }
       if (roster[club.name]) continue;
-      let squad;
-      try { squad = parseSquad(await fetchPage(`/-/kader/verein/${c.id}/saison_id/${season}/plus/1`)); }
+      let squad, html;
+      try { html = await fetchPage(`/-/kader/verein/${c.id}/saison_id/${season}/plus/1`); squad = parseSquad(html); }
       catch (e) { if (e.status === 403 || e.status === 429 || /robots/.test(e.message)) throw e; log(`  ! ${club.name}: ${e.message}`); continue; }
       const rows = squad.filter(p => wdPos(p.position)).map(p => [gameName(p.name, ''), wdPos(p.position), p.age || 25]).slice(0, MAX_REAL);
-      if (rows.length < MIN_REAL) { log(`  ! ${club.name}: só ${rows.length} jogadores lidos (layout mudou?)`); continue; }
+      if (rows.length < MIN_REAL) {
+        log(`  ! ${club.name}: só ${rows.length} jogadores lidos (layout mudou?)`);
+        if (!debugged && html) {
+          debugged = true;
+          const file = deps.saveDebug ? deps.saveDebug(`${c.id}.html`, html) : null;
+          log(`    diagnóstico da página /kader/verein/${c.id}:\n    ${describe(html)}` + (file ? `\n    HTML completo salvo em ${file}` : ''));
+        }
+        if (++fails >= 3) throw new Error('o parser não achou jogadores em 3 clubes seguidos; abortando para não sobrecarregar o site');
+        continue;
+      }
+      fails = 0;
       roster[club.name] = rows.sort((a, b) => 'GDMA'.indexOf(a[1]) - 'GDMA'.indexOf(b[1]) || a[0].localeCompare(b[0]));
       log(`  ${club.name}: ${rows.length} jogadores`);
     }
@@ -101,4 +122,4 @@ async function buildTransfermarkt(get, deps, { season = new Date().getFullYear()
   return { roster, missing: deps.allClubs().filter(n => !roster[n]) };
 }
 
-module.exports = { buildTransfermarkt, parseClubs, parseSquad, parseRobots, allowed };
+module.exports = { describe, buildTransfermarkt, parseClubs, parseSquad, parseRobots, allowed };

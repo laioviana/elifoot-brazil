@@ -12,6 +12,9 @@ assert.strictEqual(m('Atletico-MG').name, 'Atlético-MG');
 assert.strictEqual(m('Sao Paulo').name, 'São Paulo');
 assert.strictEqual(m('Ceará SC').name, 'Ceará');
 assert.strictEqual(m('CA Mineiro').name, 'Atlético-MG');
+assert.strictEqual(m('Sport Club Corinthians Paulista').name, 'Corinthians');
+assert.strictEqual(m('Clube de Regatas Brasil (AL)').name, 'CRB');
+assert.strictEqual(m('Botafogo de Futebol e Regatas').name, 'Botafogo');
 assert.strictEqual(m('CA Paranaense').name, 'Athletico-PR');
 assert.strictEqual(m('Clube do Remo').name, 'Remo');
 assert.strictEqual(m('REM').name, 'Remo'); // pela sigla
@@ -86,11 +89,16 @@ const tmGet = async p => {
 };
 const deps = { matcher: U.matcher, norm: U.norm, wdPos: U.wdPos, gameName: U.gameName, MIN_REAL: U.MIN_REAL, MAX_REAL: U.MAX_REAL, allClubs: () => D.CLUBS.flat().map(c => c[0]) };
 
+assert(/linhas odd\/even: 15/.test(TM.describe(squadHtml)));
 (async () => {
   const tm = await TM.buildTransfermarkt(tmGet, deps, { delayMs: 0, log: () => {} });
   assert.deepStrictEqual(Object.keys(tm.roster), ['Flamengo']);       // "Time Desconhecido" ignorado
   assert.strictEqual(tm.roster.Flamengo.length, 14);                  // treinador (Manager) descartado
   assert(tm.missing.length === 79);
+  // parser sem resultados em 3 clubes seguidos: aborta
+  const three = ['Flamengo', 'Palmeiras', 'Santos'].map((n, i) => `<a title="${n}" href="/x/startseite/verein/${i + 1}"></a>`).join('');
+  const emptyGet = async p => (p === '/robots.txt' ? '' : p.includes('wettbewerb/BRA1') ? three : '<html></html>');
+  await assert.rejects(TM.buildTransfermarkt(emptyGet, { ...deps, saveDebug: () => 'x' }, { delayMs: 0, log: () => {} }), /3 clubes seguidos/);
   // bloqueio (403): para tudo em vez de insistir
   await assert.rejects(TM.buildTransfermarkt(async p => { if (p === '/robots.txt') return ''; throw Object.assign(new Error('403'), { status: 403 }); }, deps, { delayMs: 0, log: () => {} }));
   // robots.txt proibindo o caminho: para
