@@ -64,8 +64,11 @@ FOOTBALL_DATA_TOKEN=... npm run update-roster -- --dry   # mostra o resultado se
 FOOTBALL_DATA_TOKEN=... npm run update-roster            # grava js/roster.js
 ```
 
-O workflow `.github/workflows/update-roster.yml` roda toda segunda-feira
-e abre um PR se algo mudou (Settings → Actions → General → permitir que o Actions crie PRs). Para a Série A, crie o secret `FOOTBALL_DATA_TOKEN`.
+O workflow `.github/workflows/update-roster.yml` roda toda segunda-feira (e sob demanda em Actions → Update roster → Run
+workflow; marque *dry_run* para testar sem abrir PR). Ele busca no Transfermarkt e, se o site bloquear o runner do GitHub,
+cai para a football-data.org (só Série A, secret `FOOTBALL_DATA_TOKEN`). Se algo mudou, abre o PR `roster-update` para
+revisão. Requisitos únicos: Settings → Actions → General → *Allow GitHub Actions to create and approve pull requests*.
+GitHub desativa workflows agendados após 60 dias sem atividade no repositório.
 Com a API-Football, se o nome de um clube não casar com `js/data.js`, o script avisa; ajuste o `ALIAS` no topo do script. As divisões
 refletem aproximadamente a temporada 2026 (a Série D foi reduzida a 20 clubes).
 
