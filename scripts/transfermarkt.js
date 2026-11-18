@@ -54,7 +54,21 @@ function parseClubsByText(html) {
   return [...out].map(([id, name]) => ({ id, name }));
 }
 
-// Página do elenco (visão detalhada "plus/1") -> [{ name, position, age }]
+// Valor de mercado do Transfermarkt ("€1.50m", "€800k", "€1,2 mio.", "1.500 Th. €", "-") -> euros (0 se ausente)
+function parseValue(s) {
+  s = decode(String(s || '').replace(/<[^>]*>/g, ' ')).toLowerCase().replace(/\s+/g, ' ');
+  const m = /(\d+(?:[.,]\d+)*)\s*(bn|mrd\.?|m|mio\.?|k|th\.?|tsd\.?)?/.exec(s);
+  if (!m) return 0;
+  let num = m[1];
+  // "1.500" (milhar europeu) vs "1.50" (decimal): 3 dígitos após o último separador = milhar
+  if (/^\d{1,3}([.,]\d{3})+$/.test(num) && !m[2]) num = num.replace(/[.,]/g, '');
+  else num = num.replace(/[.,](?=\d{3}(?:[.,]|$))/g, '').replace(',', '.');
+  const mult = { bn: 1e9, mrd: 1e9, m: 1e6, mio: 1e6, k: 1e3, th: 1e3, tsd: 1e3 }[(m[2] || '').replace('.', '')] || 1;
+  const v = Math.round(parseFloat(num) * mult);
+  return isFinite(v) && v > 0 ? v : 0;
+}
+
+// Página do elenco (visão detalhada "plus/1") -> [{ name, position, age, value }]
 function parseSquad(html) {
   const players = [];
   for (const m of html.matchAll(/<tr class="(?:odd|even)"[^>]*>([\s\S]*?)(?=<tr class="(?:odd|even)"|<\/tbody>)/g)) {
@@ -62,7 +76,8 @@ function parseSquad(html) {
     const name = /<td class="hauptlink"[^>]*>\s*<a[^>]*>([^<]+)<\/a>/.exec(row);
     const pos = /<table class="inline-table">[\s\S]*?<\/tr>\s*<tr>\s*<td>([^<]+)<\/td>/.exec(row);
     const age = /\d{1,2}\/\d{1,2}\/\d{4}\s*\((\d{1,2})\)/.exec(row);
-    if (name && pos) players.push({ name: decode(name[1]), position: decode(pos[1]), age: age ? +age[1] : null });
+    const mv = /<td class="rechts hauptlink[^"]*"[^>]*>([\s\S]*?)<\/td>/.exec(row);
+    if (name && pos) players.push({ name: decode(name[1]), position: decode(pos[1]), age: age ? +age[1] : null, value: mv ? parseValue(mv[1]) : 0 });
   }
   return players;
 }
@@ -187,7 +202,7 @@ async function buildTransfermarkt(get, deps, { season = null, leagues = LEAGUES,
     catch (e) { if (e.status === 403 || e.status === 429 || /robots/.test(e.message)) throw e; log(`  ! ${name}: ${e.message}`); continue; }
     const dropped = squad.filter(p => !wdPos(p.position));
     if (dropped.length) log(`  i ${name}: ${dropped.length} jogadores sem posição reconhecida (${[...new Set(dropped.map(p => p.position || '(vazio)'))].join(', ')})`);
-    const rows = squad.filter(p => wdPos(p.position)).map(p => [gameName(p.name, ''), wdPos(p.position), p.age || 25]).slice(0, MAX_REAL);
+    const rows = squad.filter(p => wdPos(p.position)).map(p => [gameName(p.name, ''), wdPos(p.position), p.age || 25, p.value || 0]).slice(0, MAX_REAL);
     if (rows.length < MIN_REAL) {
       log(`  ! ${name} (${c.name}): só ${rows.length} jogadores lidos`);
       if (!debugged && html && rows.length === 0) {
@@ -205,4 +220,4 @@ async function buildTransfermarkt(get, deps, { season = null, leagues = LEAGUES,
   return { roster, missing: deps.allClubs().filter(n => !roster[n]) };
 }
 
-module.exports = { resolveClubs, parseClubsByText, describe, buildTransfermarkt, parseClubs, parseSquad, parseRobots, allowed };
+module.exports = { parseValue, resolveClubs, parseClubsByText, describe, buildTransfermarkt, parseClubs, parseSquad, parseRobots, allowed };

@@ -11,7 +11,8 @@
  *
  * Wikidata: 2 consultas SPARQL (clubes e jogadores atuais). Boa cobertura na Série A/B, irregular na C/D.
  * API-Football: ~84 chamadas por rodada; a temporada atual exige plano pago.
- * Só nome, posição e idade são usados — a força dos jogadores segue a força do clube em js/data.js.
+ * Nome, posição e idade vêm de todas as fontes; o Transfermarkt traz também o valor de mercado (€), que o jogo usa
+ * para ordenar a força (FOR) dos jogadores dentro do clube. Sem valor, a força é sorteada em torno da força do clube.
  */
 'use strict';
 const fs = require('fs');
@@ -228,7 +229,7 @@ function render(roster) {
   const body = Object.keys(roster).sort((a, b) => a.localeCompare(b)).map(k =>
     `    ${JSON.stringify(k)}: [\n` + roster[k].map(p => `      ${JSON.stringify(p)}`).join(',\n') + '\n    ]').join(',\n');
   return `/* Prancheta 8-Bit — elencos reais (gerado por scripts/update-roster.js; não edite à mão)
-   Formato: { "Clube": [[nome, posição G|D|M|A, idade], ...] }. Clube ausente = jogadores gerados. */
+   Formato: { "Clube": [[nome, posição G|D|M|A, idade, valor de mercado em € (opcional)], ...] }. Clube ausente = jogadores gerados. */
 (function (root) {
   'use strict';
   const ROSTER = {
