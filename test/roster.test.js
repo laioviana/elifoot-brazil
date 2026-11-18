@@ -150,6 +150,7 @@ assert(/linhas odd\/even: 15/.test(TM.describe(squadHtml)));
 
   // 3) o motor usa nomes reais onde existem e gera o resto
   const ROSTER = require('../js/roster.js');
+  for (const k of Object.keys(ROSTER)) delete ROSTER[k]; // ignora o js/roster.js real: o teste usa só o elenco falso
   Object.assign(ROSTER, roster);
   const E = require('../js/engine.js');
   const G = E.newGame();
