@@ -141,6 +141,12 @@ assert.deepStrictEqual(r, { Flamengo: 'Clube de Regatas do Flamengo' });    // p
   const three = ['Flamengo', 'Palmeiras', 'Santos'].map((n, i) => `<a title="${n}" href="/x/startseite/verein/${i + 1}"></a>`).join('');
   const emptyGet = async p => (p === '/robots.txt' ? '' : p.includes('wettbewerb/BRA1') ? three : '<html></html>');
   await assert.rejects(TM.buildTransfermarkt(emptyGet, { ...deps, saveDebug: () => 'x' }, { delayMs: 0, log: () => {} }), /3 clubes seguidos/);
+  // ids fixados à mão: leem o clube mesmo sem ele aparecer nas listas, e vencem a associação por nome
+  const ovLog = [];
+  const ovGet = async p => { ovLog.push(p); return p === '/robots.txt' ? '' : p.includes('/kader/verein/9030/') ? squadHtml : '<html></html>'; };
+  const ov = await TM.buildTransfermarkt(ovGet, { ...deps, idOverrides: { 'Botafogo-SP': 9030, 'Clube Que Nao Existe': 1 } }, { delayMs: 0, leagues: [], log: () => {} });
+  assert.deepStrictEqual(Object.keys(ov.roster), ['Botafogo-SP']);
+  assert(ovLog.some(p => p.includes('/kader/verein/9030/')));
   // bloqueio (403): para tudo em vez de insistir
   await assert.rejects(TM.buildTransfermarkt(async p => { if (p === '/robots.txt') return ''; throw Object.assign(new Error('403'), { status: 403 }); }, deps, { delayMs: 0, log: () => {} }));
   // robots.txt proibindo o caminho: para

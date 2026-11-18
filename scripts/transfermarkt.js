@@ -165,6 +165,13 @@ async function buildTransfermarkt(get, deps, { season = null, leagues = LEAGUES,
 
   // 2) quais clubes do Transfermarkt são quais clubes do jogo
   const assigned = resolveClubs(tmClubs, info, { exact: matcher(), norm, log });
+  // ids fixados à mão (scripts/transfermarkt-ids.json) valem mais que a associação por nome e servem também
+  // para clubes que não aparecem nas listas das divisões A-D do Transfermarkt
+  for (const [name, id] of Object.entries(deps.idOverrides || {})) {
+    if (!info.some(g => g.name === name)) { log(`  ! transfermarkt-ids.json: clube desconhecido "${name}"`); continue; }
+    for (const [k, v] of assigned) if (String(v.id) === String(id) && k !== name) assigned.delete(k);
+    assigned.set(name, { id: String(id), name: `id ${id}` });
+  }
   const unmatched = tmClubs.filter(c => c.unmatched);
   const important = unmatched.filter(c => c.div != null && c.div <= 2);
   if (important.length) log(`  ? sem correspondência no jogo (divisões A-C): ${important.map(c => c.name).join('; ')}`);

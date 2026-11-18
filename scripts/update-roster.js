@@ -303,6 +303,7 @@ async function main() {
       return r.text();
     };
     res = await TM.buildTransfermarkt(get, { matcher, wdPos, gameName, norm, MIN_REAL, MAX_REAL, allClubs: () => D.CLUBS.flat().map(c => c[0]),
+        idOverrides: JSON.parse(fs.readFileSync(path.join(__dirname, 'transfermarkt-ids.json'), 'utf8')),
         clubInfo: () => D.CLUBS.flatMap((l, div) => l.map(c => ({ name: c[0], uf: c[2], div }))),
         saveDebug: (name, html) => { const dir = path.join(__dirname, '../tm-debug'); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, name), html); return dir + '/' + name; } },
       { season: opt('--season', null), leagues: opt('--leagues', 'BRA1,BRA2,BRA3,BRA4').split(',') });
