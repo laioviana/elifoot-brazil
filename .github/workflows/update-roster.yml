@@ -1,8 +1,11 @@
 name: Update roster
 
 # Atualiza js/roster.js toda segunda-feira e abre um PR se algo mudou.
-# Fonte principal: Transfermarkt (todas as divisões). Se o site bloquear o runner do GitHub, cai para a
-# football-data.org (só Série A; exige o secret FOOTBALL_DATA_TOKEN). Os demais clubes mantêm o elenco anterior.
+# Padrão (runner do GitHub): football-data.org, só Série A (secret FOOTBALL_DATA_TOKEN). Os demais clubes mantêm o
+# elenco anterior. O Transfermarkt bloqueia os runners hospedados do GitHub (responde vazio), então ele só funciona
+# num runner self-hosted na sua máquina: crie as variáveis de repositório ROSTER_RUNNER=self-hosted e
+# ROSTER_SOURCE=transfermarkt (Settings → Secrets and variables → Actions → Variables). Se o Transfermarkt falhar,
+# o workflow cai para a football-data.org.
 
 on:
   schedule:
@@ -24,7 +27,7 @@ concurrency:
 
 jobs:
   update:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.ROSTER_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -38,14 +41,16 @@ jobs:
         timeout-minutes: 30
         env:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+          ROSTER_SOURCE: ${{ vars.ROSTER_SOURCE }}
         run: |
-          if node scripts/update-roster.js --source transfermarkt 2>&1 | tee fetch.log; then
-            echo "source=Transfermarkt" >> "$GITHUB_OUTPUT"
-          else
+          if [ "$ROSTER_SOURCE" = "transfermarkt" ]; then
+            if node scripts/update-roster.js --source transfermarkt 2>&1 | tee fetch.log; then
+              echo "source=Transfermarkt" >> "$GITHUB_OUTPUT"; exit 0
+            fi
             echo "::warning::Transfermarkt falhou ou bloqueou o runner; usando football-data.org (só Série A)"
-            node scripts/update-roster.js 2>&1 | tee -a fetch.log
-            echo "source=football-data.org (só Série A)" >> "$GITHUB_OUTPUT"
           fi
+          node scripts/update-roster.js 2>&1 | tee -a fetch.log
+          echo "source=football-data.org (só Série A)" >> "$GITHUB_OUTPUT"
 
       - name: Summary
         if: always()

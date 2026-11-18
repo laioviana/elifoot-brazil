@@ -149,6 +149,10 @@ assert.deepStrictEqual(r, { Flamengo: 'Clube de Regatas do Flamengo' });    // p
   const ov = await TM.buildTransfermarkt(ovGet, { ...deps, idOverrides: { 'Botafogo-SP': 9030, 'Clube Que Nao Existe': 1 } }, { delayMs: 0, leagues: [], log: () => {} });
   assert.deepStrictEqual(Object.keys(ov.roster), ['Botafogo-SP']);
   assert(ovLog.some(p => p.includes('/kader/verein/9030/')));
+  // corpo vazio (como o Transfermarkt responde a runners do GitHub): trata como bloqueio e para
+  const emptyCalls = [];
+  await assert.rejects(TM.buildTransfermarkt(async p => { emptyCalls.push(p); return p === '/robots.txt' ? '' : ''; }, deps, { delayMs: 0, log: () => {} }), /vazia/);
+  assert.strictEqual(emptyCalls.length, 2);   // robots.txt + a primeira página; nada mais
   // bloqueio (403): para tudo em vez de insistir
   await assert.rejects(TM.buildTransfermarkt(async p => { if (p === '/robots.txt') return ''; throw Object.assign(new Error('403'), { status: 403 }); }, deps, { delayMs: 0, log: () => {} }));
   // robots.txt proibindo o caminho: para
