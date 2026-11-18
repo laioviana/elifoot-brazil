@@ -61,7 +61,40 @@ const fdGet = async () => ({ teams: [
   { name: 'Time Desconhecido', shortName: 'XYZ', tla: 'XYZ', squad: [] }
 ] });
 
+// 1d) Transfermarkt (HTML de exemplo escrito de memória; não é uma cópia da página real)
+const TM = require('../scripts/transfermarkt.js');
+const robots = TM.parseRobots('User-agent: Googlebot\nDisallow: /\n\nUser-agent: *\nDisallow: /search/\nDisallow: /*/spieler/\nAllow: /search/ok$\n');
+assert(TM.allowed(robots, '/-/kader/verein/614/saison_id/2026/plus/1'));
+assert(!TM.allowed(robots, '/search/x') && !TM.allowed(robots, '/a/spieler/9') && TM.allowed(robots, '/search/ok'));
+const leagueHtml = id => `<table class="items"><tr><td><a title="Clube de Regatas do Flamengo" href="/flamengo/startseite/verein/614/saison_id/2025"><img></a></td></tr>
+  <tr><td class="hauptlink no-border-links"><a title="Clube de Regatas do Flamengo" href="/flamengo/startseite/verein/614/saison_id/2025">Flamengo</a></td></tr>
+  <tr><td><a href="/x/startseite/verein/${id}" title="Time Desconhecido FC">X</a></td></tr></table>`;
+const row = (cls, n, pos, dob) => `<tr class="${cls}"><td class="zentriert">1</td><td class="posrela"><table class="inline-table"><tr>
+  <td class="hauptlink"><a href="/x/profil/spieler/1">${n}</a></td></tr><tr><td>${pos}</td></tr></table></td><td class="zentriert">${dob}</td></tr>`;
+const squadHtml = '<tbody>' + Array.from({ length: 14 }, (_, i) => row(i % 2 ? 'odd' : 'even', `Jogador &amp; ${i}`,
+  ['Goalkeeper', 'Centre-Back', 'Defensive Midfield', 'Left Winger'][i % 4], '26/09/1998 (27)')).join('') + row('odd', 'Sem Posição', 'Manager', '01/01/1970 (56)') + '</tbody>';
+assert.deepStrictEqual(TM.parseClubs(leagueHtml(999)).map(c => c.id), ['614', '999']);
+const ps = TM.parseSquad(squadHtml);
+assert.strictEqual(ps.length, 15);
+assert.deepStrictEqual(ps[0], { name: 'Jogador & 0', position: 'Goalkeeper', age: 27 });
+const tmGet = async p => {
+  if (p === '/robots.txt') return 'User-agent: *\nDisallow: /secret/\n';
+  if (p.includes('wettbewerb/BRA1')) return leagueHtml(999);
+  if (p.includes('wettbewerb/')) return '<html></html>';
+  if (p.includes('/kader/verein/614/')) return squadHtml;
+  throw Object.assign(new Error('nope'), { status: 404 });
+};
+const deps = { matcher: U.matcher, norm: U.norm, wdPos: U.wdPos, gameName: U.gameName, MIN_REAL: U.MIN_REAL, MAX_REAL: U.MAX_REAL, allClubs: () => D.CLUBS.flat().map(c => c[0]) };
+
 (async () => {
+  const tm = await TM.buildTransfermarkt(tmGet, deps, { delayMs: 0, log: () => {} });
+  assert.deepStrictEqual(Object.keys(tm.roster), ['Flamengo']);       // "Time Desconhecido" ignorado
+  assert.strictEqual(tm.roster.Flamengo.length, 14);                  // treinador (Manager) descartado
+  assert(tm.missing.length === 79);
+  // bloqueio (403): para tudo em vez de insistir
+  await assert.rejects(TM.buildTransfermarkt(async p => { if (p === '/robots.txt') return ''; throw Object.assign(new Error('403'), { status: 403 }); }, deps, { delayMs: 0, log: () => {} }));
+  // robots.txt proibindo o caminho: para
+  await assert.rejects(TM.buildTransfermarkt(async p => (p === '/robots.txt' ? 'User-agent: *\nDisallow: /-/\n' : ''), deps, { delayMs: 0, log: () => {} }), /robots/);
   const fd = await U.buildFootballData(fdGet, new Date('2026-06-15'), () => {});
   assert.deepStrictEqual(Object.keys(fd.roster), ['Flamengo']);       // Bragantino: elenco vazio; desconhecido ignorado
   assert.strictEqual(fd.roster.Flamengo.length, 24);                  // sem posição descartado

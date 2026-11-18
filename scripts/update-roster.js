@@ -4,6 +4,7 @@
  *   FOOTBALL_DATA_TOKEN=xxxx node scripts/update-roster.js [--dry]     (padrão: --source auto)
  *     auto = Série A pela football-data.org (grátis, elencos atuais)
  *     --with-wikidata [--recent-years N] = tenta preencher Séries B-D pela Wikidata (dados duvidosos)
+ *   node scripts/update-roster.js --source transfermarkt [--dry]   (raspa o site; veja scripts/transfermarkt.js)
  *   node scripts/update-roster.js --source wikidata [--dry]
  *   API_FOOTBALL_KEY=xxxx node scripts/update-roster.js --source apifootball [--season 2026] [--dry]
  *
@@ -291,7 +292,16 @@ async function main() {
       const wd = await wikidata();
       res = { roster: { ...wd.roster, ...res.roster }, missing: wd.missing.filter(n => !res.roster[n]) };
     } else res.missing = D.CLUBS.flat().map(c => c[0]).filter(n => !res.roster[n]);
-  } else { console.error('--source: auto | wikidata | apifootball'); process.exit(1); }
+  } else if (source === 'transfermarkt') {
+    const TM = require('./transfermarkt.js');
+    const get = async p => {
+      const r = await fetch('https://www.transfermarkt.com' + p, { headers: { 'User-Agent': UA, 'Accept-Language': 'en' } });
+      if (!r.ok) { const e = new Error(`Transfermarkt ${r.status} em ${p}`); e.status = r.status; throw e; }
+      return r.text();
+    };
+    res = await TM.buildTransfermarkt(get, { matcher, wdPos, gameName, norm, MIN_REAL, MAX_REAL, allClubs: () => D.CLUBS.flat().map(c => c[0]) },
+      { season: Number(opt('--season', new Date().getFullYear())) });
+  } else { console.error('--source: auto | transfermarkt | wikidata | apifootball'); process.exit(1); }
 
   const { roster, missing } = res;
   console.log(`${Object.keys(roster).length} clubes atualizados; ${missing.length} sem elenco real: ${missing.join(', ') || '-'}`);
@@ -303,5 +313,5 @@ async function main() {
   if (!args.includes('--dry')) fs.writeFileSync(path.join(__dirname, '../js/roster.js'), render(roster));
 }
 
-module.exports = { norm, matcher, squadFromApi, build, buildWikidata, buildFootballData, gameName, render };
+module.exports = { norm, matcher, squadFromApi, build, buildWikidata, buildFootballData, gameName, wdPos, MIN_REAL, MAX_REAL, render };
 if (require.main === module) main().catch(e => { console.error(e.message); process.exit(1); });

@@ -52,7 +52,10 @@ e as revelações da base usam nomes fictícios gerados.
 `js/roster.js` é gerado por `scripts/update-roster.js`, só com fontes gratuitas:
 
 - **Série A** — [football-data.org](https://www.football-data.org/client/register) (token grátis): elencos atuais.
-- **Séries B–D** — nomes gerados. Não há fonte gratuita confiável: a Wikidata não registra datas de início/fim
+- **Todas as divisões (opcional)** — `--source transfermarkt` lê os elencos atuais do Transfermarkt (veja o aviso sobre
+  termos de uso em `scripts/transfermarkt.js`). O workflow semanal tenta o Transfermarkt primeiro e, se for bloqueado,
+  cai para a football-data.org. Os runners do GitHub costumam ser bloqueados; se acontecer, rode localmente.
+- **Séries B–D sem Transfermarkt** — nomes gerados. Não há fonte gratuita confiável: a Wikidata não registra datas de início/fim
   de vínculo na maioria dos casos e mistura ex-jogadores. Dá para testar com `--with-wikidata`
   (`--recent-years N` filtra por data de início; `0` desliga o filtro, trazendo ex-jogadores).
 

@@ -14,9 +14,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node scripts/update-roster.js
+      - name: Fetch squads (Transfermarkt, falling back to football-data.org)
+        timeout-minutes: 30
         env:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+        run: |
+          if ! node scripts/update-roster.js --source transfermarkt; then
+            echo "::warning::Transfermarkt falhou ou bloqueou o runner; usando football-data.org (só Série A)"
+            node scripts/update-roster.js
+          fi
       - run: npm test
       - name: Open PR if changed
         env:
