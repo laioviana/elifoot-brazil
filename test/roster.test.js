@@ -75,17 +75,27 @@ assert(!TM.allowed(robots, '/search/x') && !TM.allowed(robots, '/a/spieler/9') &
 const leagueHtml = id => `<table class="items"><tr><td><a title="Clube de Regatas do Flamengo" href="/flamengo/startseite/verein/614/saison_id/2025"><img></a></td></tr>
   <tr><td class="hauptlink no-border-links"><a title="Clube de Regatas do Flamengo" href="/flamengo/startseite/verein/614/saison_id/2025">Flamengo</a></td></tr>
   <tr><td><a href="/x/startseite/verein/${id}" title="Time Desconhecido FC">X</a></td></tr></table>`;
-const row = (cls, n, pos, dob) => `<tr class="${cls}"><td class="zentriert">1</td><td class="posrela"><table class="inline-table"><tr>
-  <td class="hauptlink"><a href="/x/profil/spieler/1">${n}</a></td></tr><tr><td>${pos}</td></tr></table></td><td class="zentriert">${dob}</td></tr>`;
+const row = (cls, n, pos, dob, mv = '-') => `<tr class="${cls}"><td class="zentriert">1</td><td class="posrela"><table class="inline-table"><tr>
+  <td class="hauptlink"><a href="/x/profil/spieler/1">${n}</a></td></tr><tr><td>${pos}</td></tr></table></td><td class="zentriert">${dob}</td>
+  <td class="rechts hauptlink"><a href="/x/marktwertverlauf/spieler/1">${mv}</a></td></tr>`;
 const squadHtml = '<tbody>' + Array.from({ length: 14 }, (_, i) => row(i % 2 ? 'odd' : 'even', `Jogador &amp; ${i}`,
-  ['Goalkeeper', 'Centre-Back', 'Defensive Midfield', 'Left Winger'][i % 4], '26/09/1998 (27)')).join('') + row('odd', 'Sem Posição', 'Manager', '01/01/1970 (56)') + '</tbody>';
+  ['Goalkeeper', 'Centre-Back', 'Defensive Midfield', 'Left Winger'][i % 4], '26/09/1998 (27)', i === 3 ? '€12.00m' : i === 5 ? '-' : '€800k')).join('') + row('odd', 'Sem Posição', 'Manager', '01/01/1970 (56)') + '</tbody>';
 assert.deepStrictEqual(TM.parseClubs(leagueHtml(999)).map(c => c.id), ['614', '999']);
 const noTitle = '<table class="items"><tr><td><a href="/ceara/startseite/verein/2029"><img></a></td><td><a href="/ceara/startseite/verein/2029">Ceará Sporting Club</a></td></tr></table>';
 assert.deepStrictEqual(TM.parseClubs(noTitle), []);
 assert.deepStrictEqual(TM.parseClubsByText(noTitle), [{ id: '2029', name: 'Ceará Sporting Club' }]);
 const ps = TM.parseSquad(squadHtml);
 assert.strictEqual(ps.length, 15);
-assert.deepStrictEqual(ps[0], { name: 'Jogador & 0', position: 'Goalkeeper', age: 27 });
+assert.deepStrictEqual(ps[0], { name: 'Jogador & 0', position: 'Goalkeeper', age: 27, value: 800000 });
+assert.strictEqual(ps[3].value, 12e6);
+assert.strictEqual(ps[5].value, 0);
+assert.strictEqual(TM.parseValue('€1.50m'), 1500000);
+assert.strictEqual(TM.parseValue('€800k'), 800000);
+assert.strictEqual(TM.parseValue('€1.20bn'), 1.2e9);
+assert.strictEqual(TM.parseValue('1,50 mio. €'), 1500000);
+assert.strictEqual(TM.parseValue('1.500 Th. €'), 1500000);
+assert.strictEqual(TM.parseValue('-'), 0);
+assert.strictEqual(TM.parseValue(''), 0);
 const tmGet = async p => {
   if (p === '/robots.txt') return 'User-agent: *\nDisallow: /secret/\n';
   if (p.includes('wettbewerb/BRA1')) return leagueHtml(999);
@@ -122,6 +132,8 @@ assert.deepStrictEqual(r, { Flamengo: 'Clube de Regatas do Flamengo' });    // p
   const tm = await TM.buildTransfermarkt(tmGet, deps, { delayMs: 0, log: () => {} });
   assert.deepStrictEqual(Object.keys(tm.roster), ['Flamengo']);       // "Time Desconhecido" ignorado
   assert.strictEqual(tm.roster.Flamengo.length, 14);                  // treinador (Manager) descartado
+  assert(tm.roster.Flamengo.every(p => p.length === 4));               // [nome, pos, idade, valor]
+  assert(tm.roster.Flamengo.some(p => p[3] === 12e6));
   assert(tm.missing.length === 79);
   // Séries C/D (tipo "copa"): a página de liga não traz clubes; os da página de participantes são usados
   const cupLog = [];
@@ -210,5 +222,18 @@ assert.deepStrictEqual(r, { Flamengo: 'Clube de Regatas do Flamengo' });    // p
   assert(fla.players.some(p => p.n === 'Goleiro 7101' || p.n.startsWith('Goleiro')));
   const palm = G.teams.find(t => t.name === 'Palmeiras');
   assert(palm.players.length >= 20 && !palm.players.some(p => p.real));
+
+  // 4) valor de mercado ordena a força dentro do clube, sem mudar o nível médio
+  const avg14 = a => { const t = a.slice().sort((x, y) => y - x).slice(0, 14); return t.reduce((x, y) => x + y, 0) / t.length; };
+  const valuedList = Array.from({ length: 24 }, (_, i) => [`J${i}`, 'GDMA'[i % 4], 25, i === 0 ? 40e6 : i === 23 ? 0 : 2e6 + i * 1e5]);
+  for (let k = 0; k < 50; k++) {
+    const s = E.realStrengths(valuedList, 80);
+    assert(s[0] === Math.max(...s), 'o jogador mais valioso tem a maior força');
+    assert(s[0] - s[1] >= 7, 'estrela bem acima do resto');
+    assert(s[23] === Math.min(...s) || s[23] <= 80 - 3, 'sem valor = reserva');
+    assert(Math.abs(avg14(s) - 81.6) <= 1, 'nível médio igual ao de antes');
+  }
+  const noVal = E.realStrengths(valuedList.map(x => x.slice(0, 3)), 80);
+  assert(noVal.every(v => v >= 73 && v <= 85));                       // sem valores: sorteio antigo
   console.log('roster ok');
 })().catch(e => { console.error(e); process.exit(1); });

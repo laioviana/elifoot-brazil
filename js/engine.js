@@ -53,15 +53,32 @@
     team.players.push(p);
     return p;
   }
-  // Elenco real (js/roster.js): nomes, posições e idades reais; a força continua vindo da força do clube.
+  // Elenco real (js/roster.js): nomes, posições e idades reais. A força gira em torno da força do clube; quando o
+  // elenco traz valor de mercado (4º campo), ele ordena os jogadores: quem vale o dobro tem ~2 de FOR a mais.
+  E.realStrengths = (list, rating) => {
+    const valued = list.filter(x => x[3] > 0);
+    if (list.length && valued.length >= list.length * 0.6) {
+      const lv = valued.map(x => Math.log(x[3])).sort((a, b) => a - b);
+      const med = lv[Math.floor(lv.length / 2)];
+      const raw = list.map(x => x[3] > 0
+        ? rating + clamp(Math.round(3.2 * (Math.log(x[3]) - med)), -10, 9) + ri(-1, 1)
+        : rating + ri(-10, -5));
+      // mesmo nível médio de antes (média dos 14 melhores ≈ força do clube + 1,6), só muda quem é bom e quem não é
+      const top = raw.slice().sort((a, b) => b - a).slice(0, 14);
+      const shift = Math.round(rating + 1.6 - top.reduce((a, b) => a + b, 0) / top.length);
+      return raw.map(s => s + shift);
+    }
+    return list.map(x => rating + ri(-7, 5) - ((Math.round(x[2]) || 25) <= 20 ? 3 : 0));
+  };
   function realSquad(G, team, rating) {
     const list = (ROSTER[team.name] || []).filter(x => x && x[0] && 'GDMA'.includes(x[1])).slice(0, 26);
-    for (const [n, pos, age0] of list) {
+    const strs = E.realStrengths(list, rating);
+    list.forEach(([n, pos, age0], i) => {
       const age = clamp(Math.round(age0) || 25, 16, 40);
-      const p = mkPlayer(G, pos, rating + ri(-7, 5) - (age <= 20 ? 3 : 0), age);
+      const p = mkPlayer(G, pos, strs[i], age);
       p.n = n; p.real = 1;
       team.players.push(p);
-    }
+    });
     return list.length;
   }
   function mkSquad(G, team, rating) {
