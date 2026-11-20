@@ -36,7 +36,21 @@ for (let season = 0; season < 6; season++) {
     console.log(`\n== ${G.season} == gols/jogo ${avg.toFixed(2)} | ${U.name} (div ${U.div}) pos ${E.position(G, U.id)} esp ${G.mgr.exp} conf ${G.mgr.conf.toFixed(0)} caixa ${E.money(cash0)} -> ${E.money(U.cash)}`);
     for (let d = 0; d < 4; d++) { const t = E.table(G, d); console.log(` ${E.DIVS[d].name}: 1º ${t[0].name} ${t[0].st.pts}pts (${E.rating(t[0]).toFixed(0)}) ... 20º ${t[19].name} ${t[19].st.pts}pts (${E.rating(t[19]).toFixed(0)}) | artilheiro ${E.scorers(G, d, 1)[0].p.g}`); }
   }
+  // destaques da IA: devem trocar de clube ou ir ao mercado, não sumir
+  const stars = G.teams.filter(t => t.id !== G.mgr.team).flatMap(t => t.players.slice().sort((a, b) => b.str - a.str).slice(0, 2)
+    .filter(p => p.str > E.DIVS[t.div].norm + 7 && p.age < 33).map(p => ({ id: p.id, age: p.age, from: t.id })));
   const sum = E.endSeason(G);
+  let movedN = 0, listedN = 0, abroad = 0;
+  for (const s of stars) {
+    const f = E.findPlayer(G, s.id);
+    if (!f) { abroad++; continue; } // aposentou ou foi para o exterior
+    assert.strictEqual(f.p.age, s.age + 1, 'destaque envelheceu uma vez só');
+    if (f.t.id !== s.from) { movedN++; assert(f.t.id !== G.mgr.team); }
+    else if (G.market.some(m => m.pid === s.id && m.star)) listedN++;
+  }
+  assert(stars.length === 0 || movedN + listedN + abroad > 0, 'destaques trocam de clube ou vão ao mercado');
+  assert(G.market.filter(m => m.star).every(m => E.findPlayer(G, m.pid).t.id === m.tid));
+  if (verbose) console.log(` destaques: ${stars.length} (${movedN} transferidos, ${listedN} no mercado, ${abroad} saíram)`);
   assert.strictEqual(sum.divs.length, 4);
   for (let d = 0; d < 4; d++) assert.strictEqual(G.teams.filter(t => t.div === d).length, 20);
   for (const t of G.teams) {

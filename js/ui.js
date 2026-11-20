@@ -216,7 +216,7 @@
       <div class="row" style="margin-bottom:8px">${['', 'G', 'D', 'M', 'A'].map(p => btn(p || L('Todos', 'All'), 'mpos', `data-p="${p}"`, 'sm ' + (S.mpos === p ? 'on' : ''))).join('')}
       ${btn(L('Cabe no caixa', 'Affordable'), 'afford', '', 'sm ' + (S.afford ? 'on' : ''))}</div>
       <table><tr><th>POS</th><th>${L('NOME', 'NAME')}</th><th>${L('ID', 'AGE')}</th><th>${L('FOR', 'STR')}</th><th class="hide-s">${L('CLUBE', 'CLUB')}</th><th>${L('PREÇO', 'PRICE')}</th><th></th></tr>
-      ${list.map(({ m, f }) => `<tr><td>${posTag(f.p)}</td><td class="n">${f.p.n}</td><td>${f.p.age}</td><td class="yel">${f.p.str}</td><td class="hide-s">${f.t.abbr}</td><td class="${m.price <= U.cash ? 'grn' : 'red'}">${money(m.price)}</td>
+      ${list.map(({ m, f }) => `<tr><td>${posTag(f.p)}</td><td class="n">${m.star ? '<span class="yel" title="' + L('Destaque à venda', 'Star for sale') + '">★</span> ' : ''}${f.p.n}</td><td>${f.p.age}</td><td class="yel">${f.p.str}</td><td class="hide-s">${f.t.abbr}</td><td class="${m.price <= U.cash ? 'grn' : 'red'}">${money(m.price)}</td>
         <td>${btn(L('Comprar', 'Buy'), 'buy', `data-id="${m.pid}"`, 'sm g', m.price > U.cash)}</td></tr>`).join('') || `<tr><td colspan="7" class="dim">${L('Nenhum jogador.', 'No players.')}</td></tr>`}</table>
       <p class="dim small">${L('Você também pode fazer propostas por qualquer jogador: abra um clube na Tabela.', 'You can also bid for any player: open a club from the Table.')} · ${L('Elenco', 'Squad')}: ${U.players.length}/${E.MAX_SQUAD}</p></div>`;
   }

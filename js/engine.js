@@ -438,7 +438,7 @@
   function transfer(G, p, from, to, price) {
     from.players.splice(from.players.indexOf(p), 1);
     from.lineup = from.lineup.filter(id => id !== p.id);
-    p.sale = 0;
+    p.sale = 0; p.listed = 0;
     to.players.push(p); sortSquad(to);
     G.market = G.market.filter(m => m.pid !== p.id);
     G.offers = G.offers.filter(o => o.pid !== p.id);
@@ -446,8 +446,15 @@
     if (from.id === ut) { from.cash += price; G.fin.sold += price; ensureSquad(G, to, false); }
     if (to.id === ut) { to.cash -= price; G.fin.bought += price; ensureSquad(G, from, false); }
   }
+  // Clube da IA que compra um destaque vendido no fim da temporada: pode pagar (orçamento da divisão) e tem nível
+  // para ele, sem ser tão forte que ele vire reserva. Sorteia entre os 5 mais fortes que se encaixam; quem compra abre vaga dispensando o pior excedente.
+  function starBuyer(G, p, from, price) {
+    const c = G.teams.filter(t => t !== from && t.id !== G.mgr.team && E.DIVS[t.div].budget >= price &&
+      E.rating(t) >= p.str - 10 && E.rating(t) <= p.str + 3).sort((a, b) => E.rating(b) - E.rating(a));
+    return c.length ? pick(c.slice(0, 5)) : null;
+  }
   function refreshMarket(G) {
-    G.market = G.market.filter(m => r() > 0.2 && E.findPlayer(G, m.pid));
+    G.market = G.market.filter(m => (m.star || r() > 0.2) && E.findPlayer(G, m.pid) && E.findPlayer(G, m.pid).t.id === m.tid);
     const ai = G.teams.filter(t => t.id !== G.mgr.team);
     let guard = 0;
     while (G.market.length < 40 && guard++ < 400) {
@@ -580,9 +587,11 @@
     G.mgr.log.push({ s: G.season, team: U.name, div: oldDiv, pos, note: sum.champion ? 'champ' : sum.promoted ? 'up' : sum.relegated ? 'down' : '' });
 
     // evolução, aposentadorias e reposição
+    const moved = new Set(), listed = [];
     for (const t of G.teams) {
       const mine = t.id === ut, norm = E.DIVS[t.div].norm;
       for (const p of t.players.slice()) {
+        if (moved.has(p.id)) continue; // já envelheceu no clube que o vendeu
         p.age++;
         if (p.age <= 23) { if (p.pot > p.str) p.str += ri(0, Math.min(4, p.pot - p.str)); }
         else if (p.age <= 29) p.str += ri(-1, 1);
@@ -598,11 +607,26 @@
         }
       }
       if (!mine) {
-        // IA: vende destaques fora do padrão e reforça os pontos fracos
+        // IA: vende destaques fora do padrão (a outro clube da IA ou pelo mercado) e reforça os pontos fracos
         const byStr = t.players.slice().sort((a, b) => b.str - a.str);
-        for (const p of byStr.slice(0, 2)) if (p.str > norm + 7) {
-          t.players.splice(t.players.indexOf(p), 1);
-          addPlayer(t, mkPlayer(G, p.pos, norm + ri(-2, 5), ri(22, 29)));
+        for (const p of byStr.slice(0, 2)) if (p.str > norm + 7 && !moved.has(p.id)) {
+          if (p.listed) { // passou uma temporada no mercado sem comprador: sai para o exterior
+            t.players.splice(t.players.indexOf(p), 1);
+            t.lineup = t.lineup.filter(id => id !== p.id);
+            addPlayer(t, mkPlayer(G, p.pos, norm + ri(-2, 5), ri(22, 29)));
+            if (t.div === U.div || p.real) E.news(G, L(`${p.n} deixou o ${t.name} e foi jogar no exterior.`, `${p.n} left ${t.name} to play abroad.`), 'money');
+            continue;
+          }
+          const price = Math.round(E.value(p) * (0.95 + r() * 0.3) / 1000) * 1000;
+          const to = starBuyer(G, p, t, price);
+          if (to) {
+            moved.add(p.id);
+            transfer(G, p, t, to, price);
+            ensureSquad(G, to, false);
+            addPlayer(t, mkPlayer(G, p.pos, norm + ri(-2, 5), ri(22, 29)));
+            if (t.div === U.div || to.div === U.div || p.real)
+              E.news(G, L(`${p.n} trocou o ${t.name} pelo ${to.name} por ${E.money(price)}.`, `${p.n} moved from ${t.name} to ${to.name} for ${E.money(price)}.`), 'money');
+          } else listed.push({ p, t, price });
         }
         for (const p of byStr.slice(-2)) if (p.str < norm - 4) {
           t.players.splice(t.players.indexOf(p), 1);
@@ -616,6 +640,14 @@
     G.season++;
     setupSeason(G);
     refreshMarket(G);
+    // destaques sem comprador na IA: ficam no clube, à venda no mercado a temporada inteira; sem comprador, vão ao exterior
+    for (const { p, t, price } of listed) {
+      if (!t.players.includes(p) || t.id === G.mgr.team) continue;
+      G.market = G.market.filter(m => m.pid !== p.id);
+      G.market.unshift({ pid: p.id, tid: t.id, price, star: 1 });
+      p.listed = 1;
+      E.news(G, L(`${p.n} (${t.name}) está à venda por ${E.money(price)}.`, `${p.n} (${t.name}) is up for sale at ${E.money(price)}.`), 'money');
+    }
     E.autoLineup(U, U.fm);
 
     // propostas de emprego
