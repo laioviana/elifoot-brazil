@@ -327,7 +327,7 @@
         on.splice(on.indexOf(p), 1); m.inj[s].push(p); ev(m, 'inj', s, p);
         if (m.subs[s] < E.MAX_SUBS) {
           m.vac[s]++;
-          if (ai) aiReplace(G, m, s, p.pos); else m.needSub = true;
+          if (ai) aiReplace(G, m, s, p.pos); else { m.needSub = true; m.injP = p; }
         }
       }
       if (ai && m.subs[s] < 3 && (m.min === 62 || m.min === 72 || m.min === 82)) aiTactical(G, m, s);

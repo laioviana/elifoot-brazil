@@ -376,8 +376,9 @@
   function subsPanel() {
     const G = S.G, m = S.live, s = m.user, U = E.userTeam(G), left = E.MAX_SUBS - m.subs[s], vac = m.vac[s];
     const row = (p, a) => `<tr class="click ${S.selOut === p.id ? 'sel' : ''}" data-a="${a}" data-id="${p.id}"><td>${posTag(p)}</td><td class="n">${p.n}</td><td class="yel">${p.str}</td><td>${fitBar(p.fit)}</td></tr>`;
-    const title = S.why === 'half' ? L('INTERVALO', 'HALF TIME') : S.why === 'inj' ? L('JOGADOR LESIONADO!', 'PLAYER INJURED!') : L('JOGO PAUSADO', 'PAUSED');
-    const hint = !left ? L('Sem substituições restantes.', 'No substitutions left.') : vac ? L('Escolha no banco quem entra na vaga do lesionado.', 'Pick a bench player to replace the injured one.')
+    const ip = S.why === 'inj' && m.injP ? m.injP : null;
+    const title = S.why === 'half' ? L('INTERVALO', 'HALF TIME') : S.why === 'inj' ? (ip ? `${L('JOGADOR LESIONADO', 'PLAYER INJURED')}: ${posTag(ip)} ${ip.n}` : L('JOGADOR LESIONADO!', 'PLAYER INJURED!')) : L('JOGO PAUSADO', 'PAUSED');
+    const hint = !left ? L('Sem substituições restantes.', 'No substitutions left.') : vac ? (ip ? L(`Escolha no banco quem entra no lugar de ${ip.n}.`, `Pick a bench player to replace ${ip.n}.`) : L('Escolha no banco quem entra na vaga do lesionado.', 'Pick a bench player to replace the injured one.'))
       : S.selOut ? L('Agora toque em quem entra.', 'Now tap who comes on.') : L('Toque em quem sai e depois em quem entra.', 'Tap who goes off, then who comes on.');
     return `<div class="box"><div class="row sp"><h2>${title}</h2><span>${L('Trocas', 'Subs')}: <b class="yel">${left}</b></span></div>
       <div class="row" style="margin-bottom:8px">${styleBtns(U)}</div><p class="dim small" style="margin:0 0 6px">${hint}</p>
