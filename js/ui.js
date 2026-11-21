@@ -381,7 +381,7 @@
       : S.selOut ? L('Agora toque em quem entra.', 'Now tap who comes on.') : L('Toque em quem sai e depois em quem entra.', 'Tap who goes off, then who comes on.');
     return `<div class="box"><div class="row sp"><h2>${title}</h2><span>${L('Trocas', 'Subs')}: <b class="yel">${left}</b></span></div>
       <div class="row" style="margin-bottom:8px">${styleBtns(U)}</div><p class="dim small" style="margin:0 0 6px">${hint}</p>
-      <div class="subs"><div><h3>${L('EM CAMPO', 'ON THE PITCH')} (${m.on[s].length})</h3><table>${m.on[s].map(p => row(p, 'sout')).join('')}</table></div>
+      <div class="subs"><div><h3>${L('EM CAMPO', 'ON THE PITCH')} (${m.on[s].length})</h3><table>${m.on[s].slice().sort(E.byPos).map(p => row(p, 'sout')).join('')}</table></div>
       <div><h3>${L('BANCO', 'BENCH')}</h3><table>${E.bench(G, m, s).map(p => row(p, 'sin')).join('') || `<tr><td class="dim">—</td></tr>`}</table></div></div>
       <div class="row" style="margin-top:10px;justify-content:center">${btn(L('Voltar ao jogo ▶', 'Resume ▶'), 'resume', '', 'g big')}</div></div>`;
   }
