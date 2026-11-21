@@ -243,6 +243,8 @@
     return {
       h: H.id, a: A.id, div, fx, sc: [0, 0], min: 0, ev: [], on, ball: 0, done: false,
       start: on.map(l => new Set(l.map(p => p.id))), used: on.map(l => new Set(l.map(p => p.id))),
+      // minutos em campo por jogador (só nesta partida): { from, to }, to = null até o apito final
+      span: on.map(l => Object.fromEntries(l.map(p => [p.id, { from: 0, to: null }]))),
       subs: [0, 0], yel: [[], []], reds: [[], []], inj: [[], []], vac: [0, 0],
       user: H.id === G.mgr.team ? 0 : A.id === G.mgr.team ? 1 : -1, autoUser: false, needSub: false, att: 0
     };
@@ -270,6 +272,7 @@
       const i = m.on[s].findIndex(p => p.id === outId);
       if (i < 0) return false;
       ev(m, 'sub', s, pin, { out: m.on[s][i].n });
+      m.span[s][outId].to = m.min;
       m.on[s][i] = pin;
     } else {
       if (m.vac[s] <= 0) return false;
@@ -277,8 +280,14 @@
       ev(m, 'sub', s, pin, { out: '' });
       m.on[s].push(pin);
     }
+    m.span[s][pin.id] = { from: m.min, to: null };
     m.used[s].add(pin.id); m.subs[s]++;
     return true;
+  };
+  function leave(m, s, p) { m.on[s].splice(m.on[s].indexOf(p), 1); m.span[s][p.id].to = m.min; }
+  E.minutesPlayed = function (m, s, id) {
+    const x = m.span[s][id];
+    return x ? clamp((x.to ?? 90) - x.from, 0, 90) : 0;
   };
   function aiReplace(G, m, s, pos) {
     const b = E.bench(G, m, s).filter(p => (pos === 'G') === (p.pos === 'G')).sort((x, y) => (y.pos === pos) - (x.pos === pos) || E.eff(y) - E.eff(x));
@@ -314,17 +323,17 @@
         const p = pick(on);
         if (p.pos !== 'G' || r() < 0.2) {
           if (m.yel[s].includes(p)) {
-            on.splice(on.indexOf(p), 1); m.reds[s].push({ p, n: 1 }); ev(m, 'red', s, p);
+            leave(m, s, p); m.reds[s].push({ p, n: 1 }); ev(m, 'red', s, p);
           } else { m.yel[s].push(p); ev(m, 'yel', s, p); }
         }
       }
       if (on.length && r() < 0.0008) {
         const p = pick(on);
-        on.splice(on.indexOf(p), 1); m.reds[s].push({ p, n: 2 }); ev(m, 'red', s, p);
+        leave(m, s, p); m.reds[s].push({ p, n: 2 }); ev(m, 'red', s, p);
       }
       if (on.length && r() < 0.0012) {
         const p = pick(on);
-        on.splice(on.indexOf(p), 1); m.inj[s].push(p); ev(m, 'inj', s, p);
+        leave(m, s, p); m.inj[s].push(p); ev(m, 'inj', s, p);
         if (m.subs[s] < E.MAX_SUBS) {
           m.vac[s]++;
           if (ai) aiReplace(G, m, s, p.pos); else { m.needSub = true; m.injP = p; }
@@ -362,8 +371,9 @@
         else if (res === 'D') { st.d++; st.pts++; }
         else { st.l++; t.fans = Math.round(t.fans * 0.998); }
         t.form.push(res); if (t.form.length > 5) t.form.shift();
+        // desgaste proporcional aos minutos jogados: 11 a cada 90' (+3 se tiver mais de 30 anos)
         for (const p of t.players) if (m.used[s].has(p.id))
-          p.fit = Math.max(20, p.fit - (m.start[s].has(p.id) ? 11 + (p.age > 30 ? 3 : 0) : 6));
+          p.fit = Math.max(20, p.fit - Math.round((11 + (p.age > 30 ? 3 : 0)) * E.minutesPlayed(m, s, p.id) / 90));
         for (const p of m.yel[s]) {
           if (m.reds[s].some(x => x.p === p)) continue;
           if (++p.yc >= 3) {
