@@ -153,7 +153,7 @@
       <span>${L('Força', 'Str')} <b class="yel">${lp.length ? Math.round(lp.reduce((s, p) => s + E.eff(p), 0) / lp.length) : 0}</b></span></div>
       ${probs.map(p => `<div class="red">! ${p}</div>`).join('')}
       <h3>${L('ESCALAR AUTOMÁTICO', 'AUTO PICK')}</h3>
-      <div class="row">${E.FORMATIONS.map((f, i) => btn(f.join('-'), 'auto', `data-i="${i}"`, 'sm')).join('')}</div>
+      <div class="row">${E.FORMATIONS.map((f, i) => btn(f.join('-'), 'auto', `data-i="${i}"`, 'sm ' + (U.fm && U.fm.join('-') === f.join('-') ? 'on' : ''))).join('')}</div>
       <h3>${L('POSTURA', 'STYLE')}</h3>
       <div class="row">${styleBtns(U)}</div></div>
       <div class="box scroll"><p class="dim small" style="margin:0 0 6px">${L('Toque no jogador para escalar ou tirar do time.', 'Tap a player to add or remove from the lineup.')}</p>
