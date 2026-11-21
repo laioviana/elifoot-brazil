@@ -55,13 +55,21 @@
   }
   // Elenco real (js/roster.js): nomes, posições e idades reais. A força gira em torno da força do clube; quando o
   // elenco traz valor de mercado (4º campo), ele ordena os jogadores: quem vale o dobro tem ~2 de FOR a mais.
+  // O mercado paga menos por goleiros e veteranos do que eles rendem em campo: antes de comparar valores, corrige o
+  // log do valor por posição e idade (calibrado com os elencos reais: veteranos e jogadores de cada posição no mesmo
+  // nível médio; goleiro titular no nível dos titulares de linha, pois reservas de gol valem muito pouco).
+  E.VALUE_ADJ = { pos: { G: 0.6, D: 0.4, M: 0.2, A: 0 }, age: [[30, 0], [33, 0.4], [35, 1.0], [99, 1.9]] };
+  const adjLogValue = x => {
+    const age = Math.round(x[2]) || 25, a = E.VALUE_ADJ.age.find(([lim]) => age < lim);
+    return Math.log(x[3]) + (E.VALUE_ADJ.pos[x[1]] || 0) + (a ? a[1] : 0);
+  };
   E.realStrengths = (list, rating) => {
     const valued = list.filter(x => x[3] > 0);
     if (list.length && valued.length >= list.length * 0.6) {
-      const lv = valued.map(x => Math.log(x[3])).sort((a, b) => a - b);
+      const lv = valued.map(adjLogValue).sort((a, b) => a - b);
       const med = lv[Math.floor(lv.length / 2)];
       const raw = list.map(x => x[3] > 0
-        ? rating + clamp(Math.round(3.2 * (Math.log(x[3]) - med)), -10, 9) + ri(-1, 1)
+        ? rating + clamp(Math.round(3.2 * (adjLogValue(x) - med)), -10, 9) + ri(-1, 1)
         : rating + ri(-10, -5));
       // mesmo nível médio de antes (média dos 14 melhores ≈ força do clube + 1,6), só muda quem é bom e quem não é
       const top = raw.slice().sort((a, b) => b - a).slice(0, 14);

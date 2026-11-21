@@ -233,6 +233,13 @@ assert.deepStrictEqual(r, { Flamengo: 'Clube de Regatas do Flamengo' });    // p
     assert(s[23] === Math.min(...s) || s[23] <= 80 - 3, 'sem valor = reserva');
     assert(Math.abs(avg14(s) - 81.6) <= 1, 'nível médio igual ao de antes');
   }
+  // goleiros e veteranos: o mesmo valor de mercado vale mais FOR que o de um atacante de 27 anos
+  const mixed = Array.from({ length: 20 }, (_, i) => [`M${i}`, 'M', 26, 3e6]);
+  mixed.push(['Atacante', 'A', 27, 5e6], ['Goleiro', 'G', 27, 5e6], ['Veterano', 'A', 35, 5e6]);
+  for (let k = 0; k < 30; k++) {
+    const s = E.realStrengths(mixed, 80), [fw, gk, vet] = s.slice(-3);
+    assert(gk >= fw && vet >= fw + 3, `ajuste de posição/idade: atacante ${fw}, goleiro ${gk}, veterano ${vet}`);
+  }
   const noVal = E.realStrengths(valuedList.map(x => x.slice(0, 3)), 80);
   assert(noVal.every(v => v >= 73 && v <= 85));                       // sem valores: sorteio antigo
   console.log('roster ok');
