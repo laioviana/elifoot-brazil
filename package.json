@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "start": "python3 -m http.server 8080",
-    "test": "node test/sim.test.js && node test/roster.test.js",
+    "test": "node test/sim.test.js && node test/roster.test.js && node test/order.test.js",
     "update-roster": "node scripts/update-roster.js",
     "refresh-roster": "bash scripts/refresh-roster.sh"
   }

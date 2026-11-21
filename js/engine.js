@@ -98,8 +98,9 @@
       addPlayer(team, mkPlayer(G, pos, rating + ri(-6, 5) - (age <= 20 ? 3 : 0), age));
     }
   }
+  E.byPos = (a, b) => POS_ORDER[a.pos] - POS_ORDER[b.pos] || b.str - a.str;
   function sortSquad(team) {
-    team.players.sort((a, b) => POS_ORDER[a.pos] - POS_ORDER[b.pos] || b.str - a.str);
+    team.players.sort(E.byPos);
   }
   E.rating = team => {
     const s = team.players.map(p => p.str).sort((a, b) => b - a).slice(0, 14);
