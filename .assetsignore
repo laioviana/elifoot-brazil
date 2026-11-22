@@ -7,5 +7,6 @@ package.json
 wrangler.jsonc
 .assetsignore
 README.md
+CHANGELOG.md
 docs
 CLAUDE.md
