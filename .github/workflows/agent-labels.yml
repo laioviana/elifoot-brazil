@@ -20,6 +20,7 @@ jobs:
           mk agent:plan       1d76db 'Você: inicia o planejamento desta issue'
           mk plan:questions   fbca04 'Esperando suas respostas nos comentários'
           mk plan:ready       0e8a16 'Plano pronto: aprove com plan:approved ou comente'
+          mk plan:manual      b60205 'Você: exige aprovação do plano mesmo para mudança pequena'
           mk plan:approved    5319e7 'Você: aprova o plano e inicia o desenvolvimento'
           mk agent:dev        c5def5 'Agente desenvolvendo'
           mk agent:review     c5def5 'Agente revisando'
