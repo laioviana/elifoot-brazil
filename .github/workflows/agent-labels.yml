@@ -1,0 +1,30 @@
+name: "Agent: labels"
+
+# Rode uma vez (Actions → Agent: labels → Run workflow) para criar os rótulos do pipeline de agentes.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - run: |
+          mk() { gh label create "$1" --color "$2" --description "$3" --force; }
+          mk agent:plan       1d76db 'Você: inicia o planejamento desta issue'
+          mk plan:questions   fbca04 'Esperando suas respostas nos comentários'
+          mk plan:ready       0e8a16 'Plano pronto: aprove com plan:approved ou comente'
+          mk plan:approved    5319e7 'Você: aprova o plano e inicia o desenvolvimento'
+          mk agent:dev        c5def5 'Agente desenvolvendo'
+          mk agent:review     c5def5 'Agente revisando'
+          mk ready-for-human  0e8a16 'PR pronto para sua revisão e merge'
+          mk needs-human      d93f0b 'O pipeline parou e precisa de você'
+          mk agent:paused     e99695 'Pausado (uso do plano ou falha); readicione o rótulo para retomar'
+          mk agent:queued     bfdadc 'Na fila: começa quando o pipeline estiver livre'
+          mk agent:working    ededed 'Um agente está rodando agora (automático)'

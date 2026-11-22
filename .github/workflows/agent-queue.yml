@@ -1,0 +1,46 @@
+name: "Agent: queue"
+
+# Despacha a próxima issue com o rótulo agent:queued quando o pipeline está livre, ligado e (no modo noturno)
+# dentro da janela de horário. Roda a cada hora e sempre que uma etapa termina.
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_run:
+    workflows: ["Agent: plan", "Agent: develop"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+concurrency:
+  group: agent-queue
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AGENTS_ENABLED: ${{ vars.AGENTS_ENABLED }}
+      AGENTS_NIGHT_ONLY: ${{ vars.AGENTS_NIGHT_ONLY }}
+      AGENTS_NIGHT_START: ${{ vars.AGENTS_NIGHT_START }}
+      AGENTS_NIGHT_END: ${{ vars.AGENTS_NIGHT_END }}
+      AGENTS_TZ: ${{ vars.AGENTS_TZ }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dispatch next queued issue
+        run: |
+          source scripts/agents/lib.sh
+          reason="$(blocked_reason)"
+          if [ -n "$reason" ]; then echo "Fila parada: $reason"; exit 0; fi
+          next="$(gh issue list --state open --label agent:queued --json number --jq 'sort_by(.number) | .[0].number // empty')"
+          if [ -z "$next" ]; then echo "Fila vazia."; exit 0; fi
+          clear_state "$next"
+          if has_label "$next" plan:approved; then wf=agent-develop.yml; else wf=agent-plan.yml; fi
+          echo "Despachando #$next em $wf"
+          gh workflow run "$wf" -f issue="$next"
