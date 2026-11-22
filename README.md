@@ -89,5 +89,6 @@ refletem aproximadamente a temporada 2026 (a Série D foi reduzida a 20 clubes).
 
 ## Publicação
 
-O workflow em `.github/workflows/ci.yml` roda os testes e publica no GitHub Pages a cada push na `main`
-(ative em *Settings → Pages → Source: GitHub Actions*).
+O workflow `.github/workflows/ci.yml` roda os testes a cada push/PR. O workflow `.github/workflows/release.yml` sobe a
+versão, atualiza o `CHANGELOG.md`, cria a tag e publica no GitHub Pages a cada push na `main`
+(ative em *Settings → Pages → Source: GitHub Actions*). Detalhes em `docs/versioning.md`.
