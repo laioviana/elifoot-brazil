@@ -1,0 +1,100 @@
+name: "Agent: plan"
+
+# Etapa 1 do pipeline de agentes (veja docs/agent-pipeline.md).
+# Começa quando você adiciona o rótulo agent:plan, quando você comenta numa issue que está esperando sua resposta
+# (plan:questions / plan:ready), ou quando a fila (agent-queue.yml) despacha a issue.
+
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Número da issue
+        required: true
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: agent-plan-${{ github.event.issue.number || inputs.issue }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: >-
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'issues' && github.event.label.name == 'agent:plan') ||
+      (github.event_name == 'issue_comment' && !github.event.issue.pull_request &&
+       github.event.comment.user.type != 'Bot' &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+       !contains(github.event.issue.labels.*.name, 'plan:approved') &&
+       (contains(github.event.issue.labels.*.name, 'plan:questions') ||
+        contains(github.event.issue.labels.*.name, 'plan:ready')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      ISSUE: ${{ github.event.issue.number || inputs.issue }}
+      GH_TOKEN: ${{ github.token }}
+      AGENTS_ENABLED: ${{ vars.AGENTS_ENABLED }}
+      AGENTS_NIGHT_ONLY: ${{ vars.AGENTS_NIGHT_ONLY }}
+      AGENTS_NIGHT_START: ${{ vars.AGENTS_NIGHT_START }}
+      AGENTS_NIGHT_END: ${{ vars.AGENTS_NIGHT_END }}
+      AGENTS_TZ: ${{ vars.AGENTS_TZ }}
+      AGENTS_USAGE_CHECK: ${{ vars.AGENTS_USAGE_CHECK }}
+      AGENTS_MAX_USAGE: ${{ vars.AGENTS_MAX_USAGE }}
+      CLAUDE_CODE_VERSION: ${{ vars.CLAUDE_CODE_VERSION }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      MODEL: ${{ vars.AGENTS_PLAN_MODEL || 'claude-opus-5-5' }}
+      MAX_TURNS: ${{ vars.AGENTS_PLAN_MAX_TURNS || '60' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Gate (switch, night window, queue, usage)
+        id: gate
+        run: bash scripts/agents/gate.sh "$ISSUE"
+
+      - name: Plan with Claude
+        id: claude
+        if: steps.gate.outputs.proceed == 'true'
+        continue-on-error: true
+        run: |
+          source scripts/agents/lib.sh
+          has_label "$ISSUE" agent:plan || gh issue edit "$ISSUE" --add-label agent:plan >/dev/null
+          out="$RUNNER_TEMP/agent-out"; mkdir -p "$out"
+          bash scripts/agents/fetch-thread.sh "$ISSUE" "$RUNNER_TEMP/thread.md"
+          GH_TOKEN= bash scripts/agents/run-claude.sh "$MODEL" "$MAX_TURNS" \
+            "Skill Read Glob Grep Write Bash(npm test) Bash(git log:*) Bash(git show:*) Bash(ls:*)" \
+            "/issue-planner THREAD=$RUNNER_TEMP/thread.md OUT=$out (issue #$ISSUE)"
+
+      - name: Publish questions or plan
+        if: steps.gate.outputs.proceed == 'true'
+        run: |
+          source scripts/agents/lib.sh
+          out="$RUNNER_TEMP/agent-out"
+          if [ "${{ steps.claude.outcome }}" != success ]; then
+            pause "$ISSUE" "O agente de planejamento falhou ou atingiu o limite de uso do plano. Veja o log: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          elif [ -s "$out/questions.md" ]; then
+            gh issue comment "$ISSUE" --body-file "$out/questions.md" >/dev/null
+            set_state "$ISSUE" plan:questions
+          elif [ -s "$out/plan.md" ]; then
+            { echo '<!-- agent-plan -->'; cat "$out/plan.md"; echo
+              echo '---'
+              echo '✅ Para aprovar, adicione o rótulo **`plan:approved`**. Para pedir mudanças, comente nesta issue.'
+            } > "$RUNNER_TEMP/plan-comment.md"
+            gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/plan-comment.md" >/dev/null
+            set_state "$ISSUE" plan:ready
+          else
+            set_state "$ISSUE" needs-human
+            comment "$ISSUE" "⚠️ O agente de planejamento terminou sem perguntas nem plano. Log: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          fi
+
+      - name: Release
+        if: always() && steps.gate.outputs.proceed == 'true'
+        run: gh issue edit "$ISSUE" --remove-label agent:working >/dev/null || true

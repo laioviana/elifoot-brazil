@@ -1,0 +1,75 @@
+name: "Agent: develop"
+
+# Etapas 3 e 4 do pipeline de agentes (veja docs/agent-pipeline.md): Sonnet implementa o plano aprovado e abre um PR
+# em rascunho, Opus revisa, até 3 rodadas. Começa quando você adiciona o rótulo plan:approved ou quando a fila
+# (agent-queue.yml) despacha a issue.
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Número da issue
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: agent-develop
+  cancel-in-progress: false
+
+jobs:
+  develop:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'plan:approved'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      ISSUE: ${{ github.event.issue.number || inputs.issue }}
+      GH_TOKEN: ${{ github.token }}
+      BASE: ${{ github.event.repository.default_branch }}
+      AGENTS_ENABLED: ${{ vars.AGENTS_ENABLED }}
+      AGENTS_NIGHT_ONLY: ${{ vars.AGENTS_NIGHT_ONLY }}
+      AGENTS_NIGHT_START: ${{ vars.AGENTS_NIGHT_START }}
+      AGENTS_NIGHT_END: ${{ vars.AGENTS_NIGHT_END }}
+      AGENTS_TZ: ${{ vars.AGENTS_TZ }}
+      AGENTS_USAGE_CHECK: ${{ vars.AGENTS_USAGE_CHECK }}
+      AGENTS_MAX_USAGE: ${{ vars.AGENTS_MAX_USAGE }}
+      CLAUDE_CODE_VERSION: ${{ vars.CLAUDE_CODE_VERSION }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      DEV_MODEL: ${{ vars.AGENTS_DEV_MODEL || 'claude-sonnet-5-5' }}
+      DEV_MAX_TURNS: ${{ vars.AGENTS_DEV_MAX_TURNS || '120' }}
+      REVIEW_MODEL: ${{ vars.AGENTS_REVIEW_MODEL || 'claude-opus-5-5' }}
+      REVIEW_MAX_TURNS: ${{ vars.AGENTS_REVIEW_MAX_TURNS || '80' }}
+      MAX_ROUNDS: ${{ vars.AGENTS_MAX_ROUNDS || '3' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Gate (switch, night window, queue, usage)
+        id: gate
+        run: bash scripts/agents/gate.sh "$ISSUE"
+
+      - name: Develop and review
+        if: steps.gate.outputs.proceed == 'true'
+        run: bash scripts/agents/develop.sh "$ISSUE"
+
+      - name: Upload agent logs
+        if: always() && steps.gate.outputs.proceed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-logs-${{ env.ISSUE }}
+          path: ${{ runner.temp }}/agent-out
+          if-no-files-found: ignore
+
+      - name: Release
+        if: always() && steps.gate.outputs.proceed == 'true'
+        run: gh issue edit "$ISSUE" --remove-label agent:working >/dev/null || true
