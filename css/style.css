@@ -40,6 +40,9 @@ input[type=text] { font-family: var(--tx); font-size: 24px; background: #000; co
 .menu button { min-width: 240px; }
 .blink { animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
+.credit { font-family: var(--px); font-size: 9px; line-height: 1.8; color: var(--dim); margin-top: 28px; }
+.credit a { color: var(--yellow); text-decoration: none; text-shadow: 2px 2px 0 #000; }
+.credit a:hover, .credit a:focus { color: var(--pink); text-decoration: underline dashed; }
 
 /* cabeçalho */
 .hud { display: flex; gap: 10px; align-items: center; }
