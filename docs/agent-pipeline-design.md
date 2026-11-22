@@ -37,6 +37,7 @@ reviews and merges by hand. Agents never merge.
 | 23 | First test | A small, real issue, after merge. |
 | 24 | Keep usage for chat | Before each stage (plan, each review, each fix), read 5-hour and weekly usage; pause at ≥ `AGENTS_MAX_USAGE` (default 80%, adjustable). If the usage cannot be read, pause (fail-safe). |
 | 25 | Fallback if 24 does not work | Both: the manual switch, and night mode (`AGENTS_NIGHT_ONLY`, 01:00–06:00 São Paulo). |
+| 26 | Owner feedback on the PR | A GitHub review with **Request changes** from the owner on an `agent/issue-*` PR sends it back: Sonnet addresses the owner's comments (they override the plan), Opus re-reviews (checking each request), CI runs, `ready-for-human` again. Plain comments do not trigger agents. Same usage check, queue and round limit. Added after the first real run (issue #24). |
 
 ## Skills used
 
@@ -64,7 +65,11 @@ reviews and merges by hand. Agents never merge.
 - **Queue.** `agent-queue.yml` runs hourly and after every stage. It dispatches the oldest `agent:queued` issue when
   the switch is on, nothing is running (`agent:working`), and (in night mode) the hour is inside the window.
 - **Resume.** Re-adding `plan:approved` finds the existing `agent/issue-<N>-*` branch and PR and continues with a review
-  round instead of starting over.
+  round instead of starting over. If the owner requested changes after the agent's last commit, that review is
+  picked up too (so queued or paused owner reviews are not lost).
+- **Agent code never runs with the pipeline's tokens.** `agent-develop.yml` always checks out the default branch,
+  `develop.sh` runs from a copy of `scripts/agents/` before switching to the agent branch, and `npm test` (which runs
+  agent-written code) runs with `GH_TOKEN` and `CLAUDE_CODE_OAUTH_TOKEN` removed from its environment.
 
 ## Known limitations
 
