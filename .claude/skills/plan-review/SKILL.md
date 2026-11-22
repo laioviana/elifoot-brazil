@@ -13,6 +13,8 @@ The prompt gives you:
 - `BASE` — the base ref to diff against (e.g. `origin/main`).
 - `TESTS` — the latest `npm test` output and exit code.
 - `SUMMARY` — the developer's summary.
+- `OWNER_REVIEW` (optional) — the owner's "Request changes" review of this PR (Markdown, one `file:line` heading
+  per inline comment).
 - `OUT` — the directory for your verdict.
 
 ## Language
@@ -28,7 +30,10 @@ Write `summary` and finding messages in the language of the plan.
    edge cases, save-game incompatibility, missing `L(pt, en)` translations, DOM code in `js/engine.js`).
 3. **Plan conformance.** For each item in *Tarefas*, *Plano de testes* and *Critérios de aceitação*, check that the
    change actually does it. Also flag scope creep (changes the plan did not ask for).
-4. **Tests.** A failing `npm test` is always a blocker. Missing tests the plan asked for are major.
+4. **Owner requests.** When `OWNER_REVIEW` is given, check that each owner request is fully done. An owner request
+   that is not done is a `major` finding. Owner requests override the plan: a change the owner asked for is not
+   scope creep, even if the plan did not mention it.
+5. **Tests.** A failing `npm test` is always a blocker. Missing tests the plan asked for are major.
 
 Report only findings you have verified in the code. No style nitpicks unless `CLAUDE.md` asks for the style.
 

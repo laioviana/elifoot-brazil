@@ -11,6 +11,7 @@ you: label plan:approved
   └─ Developer (Sonnet, implement-plan) ──► draft PR
        └─ Reviewer (Opus, plan-review + code-review) ──► changes? back to Developer (max 3 reviews)
             └─ CI green ──► PR marked ready, label ready-for-human ──► you review and merge
+                                                                    └─ you "Request changes" ──► back to Developer
 ```
 
 ---
@@ -94,6 +95,7 @@ run and the develop run) and tune `AGENTS_MAX_USAGE` if you want.
 | Answer the planner's questions | **Comment in the same issue**, by number: `1 sim, 2 usar 3 substituições, 3 sim`. Just `sim` accepts every recommendation. |
 | Approve the plan | Add label **`plan:approved`** |
 | Ask for plan changes | Comment in the issue with what to change (while it is `plan:ready`) |
+| Ask the agent to change the PR | On the agent's PR: **Files changed** → leave your comments → **Review changes** → **Request changes** → **Submit review**. Sonnet fixes them, Opus re-reviews, CI runs, and the issue goes back to `ready-for-human`. Plain comments (without "Request changes") do **not** start an agent. |
 | Merge | When the issue gets **`ready-for-human`**, review the PR and merge it yourself |
 | Resume after `agent:paused` | Remove and re-add the last label you added (`agent:plan` or `plan:approved`) |
 | Stop everything | Set variable `AGENTS_ENABLED` = `false` |

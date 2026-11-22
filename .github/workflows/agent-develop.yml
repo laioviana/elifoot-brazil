@@ -1,17 +1,22 @@
 name: "Agent: develop"
 
 # Etapas 3 e 4 do pipeline de agentes (veja docs/agent-pipeline.md): Sonnet implementa o plano aprovado e abre um PR
-# em rascunho, Opus revisa, até 3 rodadas. Começa quando você adiciona o rótulo plan:approved ou quando a fila
-# (agent-queue.yml) despacha a issue.
+# em rascunho, Opus revisa, até 3 rodadas. Começa quando você adiciona o rótulo plan:approved, quando a fila
+# (agent-queue.yml) despacha a issue, ou quando você envia uma revisão "Request changes" num PR do agente.
 
 on:
   issues:
     types: [labeled]
+  pull_request_review:
+    types: [submitted]
   workflow_dispatch:
     inputs:
       issue:
         description: Número da issue
         required: true
+      owner_review_id:
+        description: ID de uma revisão sua a atender (opcional)
+        required: false
 
 permissions:
   contents: write
@@ -25,11 +30,21 @@ concurrency:
 
 jobs:
   develop:
-    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'plan:approved'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && github.event.label.name == 'plan:approved') ||
+      (github.event_name == 'pull_request_review' &&
+       github.event.review.state == 'changes_requested' &&
+       github.event.review.user.type != 'Bot' &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association) &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       startsWith(github.event.pull_request.head.ref, 'agent/issue-'))
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
       ISSUE: ${{ github.event.issue.number || inputs.issue }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      OWNER_REVIEW_ID: ${{ github.event.review.id || inputs.owner_review_id }}
       GH_TOKEN: ${{ github.token }}
       BASE: ${{ github.event.repository.default_branch }}
       AGENTS_ENABLED: ${{ vars.AGENTS_ENABLED }}
@@ -47,12 +62,18 @@ jobs:
       REVIEW_MAX_TURNS: ${{ vars.AGENTS_REVIEW_MAX_TURNS || '80' }}
       MAX_ROUNDS: ${{ vars.AGENTS_MAX_ROUNDS || '3' }}
     steps:
+      # Sempre a branch principal: os scripts do pipeline nunca vêm da branch escrita pelo agente.
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Resolve issue number
+        if: env.HEAD_REF != ''
+        run: echo "ISSUE=$(sed -E 's#^agent/issue-([0-9]+).*#\1#' <<<"$HEAD_REF")" >> "$GITHUB_ENV"
 
       - name: Gate (switch, night window, queue, usage)
         id: gate

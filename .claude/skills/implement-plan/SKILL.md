@@ -13,6 +13,8 @@ The prompt gives you:
 - `PLAN` — the approved plan file, e.g. `docs/plans/issue-12.md`. It is the spec. Follow it.
 - `OUT` — the directory for your summary.
 - `REVIEW` (fix rounds only) — the reviewer's findings as JSON, and `TESTS` — the latest `npm test` output.
+- `OWNER_REVIEW` (optional) — a Markdown file with the **owner's** review of the PR ("Request changes"): the review
+  text and each inline comment with its `file:line`.
 
 ## Language
 
@@ -35,6 +37,13 @@ Write the summary in the language of the plan. Code comments in Portuguese, as i
 3. If you believe a finding is wrong, do not change the code for it; explain why in the summary.
 4. Run `npm test` until it passes.
 
+## Owner review rounds
+
+When `OWNER_REVIEW` is given, the owner looked at the PR and asked for changes. Their requests **take priority over
+the plan**: if a request contradicts the plan, follow the owner and say so in the summary. Address every comment
+(each `file:line` heading is one request). Keep the change limited to what they asked. Run `npm test` until it
+passes. Keep `OWNER_REVIEW` in mind in later fix rounds too, so a reviewer fix does not undo an owner request.
+
 ## Output
 
 Write `OUT/summary.md`:
@@ -45,6 +54,9 @@ Write `OUT/summary.md`:
 
 ## Critérios de aceitação
 - [x] <criterion> — <how it is met>
+
+## Pedidos do dono
+<only when OWNER_REVIEW was given: each request → what you changed>
 
 ## Notas para o revisor
 <deviations from the plan, findings not fixed and why, anything risky>
