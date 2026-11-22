@@ -75,7 +75,7 @@
   function title() {
     return `<div class="title">
       <div class="logo">PRANCHETA</div>
-      <div class="logo2">Campeonato Brasileiro Serie A - D</div>
+      <div class="logo2">Campeonato Brasileiro Série A - D</div>
       <canvas id="tcv" width="64" height="36"></canvas>
       <div class="menu">
         ${store.get(KEY) ? btn(L('Continuar', 'Continue'), 'cont', '', 'g big') : ''}
