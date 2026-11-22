@@ -85,6 +85,7 @@
       </div>
       <p class="dim small">${L('Comande um clube da Série D até o topo do futebol brasileiro.', 'Take a Série D club to the top of Brazilian football.')}</p>
       <footer class="credit"><span class="red">♥</span> ${L('Escalado, treinado e apitado por', 'Picked, coached and refereed by')} <a href="https://x.com/laioviana" target="_blank" rel="noopener noreferrer">@laioviana</a></footer>
+      <p class="version">v${E.VERSION}</p>
     </div>`;
   }
   function drawTitle() {
