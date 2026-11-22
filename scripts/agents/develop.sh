@@ -72,7 +72,7 @@ else
     "/implement-plan PLAN=$plan OUT=$out (issue #$issue, primeira rodada: implementar)" \
     || stop_paused 'O agente de desenvolvimento falhou ou atingiu o limite de uso do plano.'
   git add "$plan"
-  commit_push "Implementa #$issue: $title" || fail 'o agente de desenvolvimento não alterou nenhum arquivo.'
+  commit_push "Implement #$issue: $title" || fail 'o agente de desenvolvimento não alterou nenhum arquivo.'
   pr=""
 fi
 
