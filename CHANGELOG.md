@@ -5,6 +5,7 @@ MAJOR = breaks old saves or redesigns the game, MINOR = new feature, PATCH = bug
 Every PR adds a line under `## Unreleased`; the release workflow turns it into a version section on merge.
 
 ## Unreleased
+- Title screen: the author credit now sits at the very bottom of the page (above the version tag).
 - Game versioning: version shown on the title screen, automatic patch release on every merge, `npm run bump` for minor/major releases.
 
 ## 1.0.0 — 2026-11-22

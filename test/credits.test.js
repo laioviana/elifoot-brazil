@@ -23,4 +23,18 @@ assert(/L\('Escalado, treinado e apitado por', 'Picked, coached and refereed by'
 assert.strictEqual(titulo.split('▼ PRESS START ▼').length - 1, 1, 'PRESS START uma única vez');
 assert(titulo.indexOf('▼ PRESS START ▼') < titulo.indexOf('<div class="menu">'), 'PRESS START acima do menu');
 
+// Rodapé no fim da página: depois da descrição; só a versão vem depois dele.
+assert(titulo.indexOf('<footer class="credit"') > titulo.lastIndexOf('<p class="dim'), 'crédito depois da descrição');
+assert(/<\/footer>\s*<p class="version">[^<]*<\/p>\s*<\/div>`;/.test(titulo), 'só a versão e o </div> de .title depois do rodapé');
+const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'style.css'), 'utf8');
+const regra = sel => {
+  const ini = css.indexOf('\n' + sel + ' {');
+  assert(ini >= 0, 'regra ' + sel);
+  return css.slice(ini, css.indexOf('}', ini));
+};
+assert(regra('.credit').includes('margin-top: auto'), '.credit empurrado para o fim');
+const t = regra('.title');
+assert(t.includes('display: flex') && t.includes('flex-direction: column') && /min-height:[^;]*100vh/.test(t), '.title coluna com altura mínima');
+assert(/padding-bottom/.test(regra('#app:has(> .title)')), 'padding-bottom reduzido na tela de título');
+
 console.log('credits.test.js ok');
