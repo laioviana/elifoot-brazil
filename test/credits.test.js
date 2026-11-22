@@ -19,4 +19,8 @@ assert(a[0].includes('rel="noopener noreferrer"'), 'rel seguro');
 assert(!a[0].includes('data-a'), 'sem data-a para o handler global ignorar');
 assert(/L\('Escalado, treinado e apitado por', 'Picked, coached and refereed by'\)/.test(titulo), 'texto bilíngue');
 
+// "PRESS START" aparece uma única vez, acima do menu.
+assert.strictEqual(titulo.split('▼ PRESS START ▼').length - 1, 1, 'PRESS START uma única vez');
+assert(titulo.indexOf('▼ PRESS START ▼') < titulo.indexOf('<div class="menu">'), 'PRESS START acima do menu');
+
 console.log('credits.test.js ok');
