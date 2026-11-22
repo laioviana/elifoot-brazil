@@ -77,6 +77,7 @@
       <div class="logo">PRANCHETA</div>
       <div class="logo2">Campeonato Brasileiro Série A - D</div>
       <canvas id="tcv" width="64" height="36"></canvas>
+      <p class="dim small blink">▼ PRESS START ▼</p>
       <div class="menu">
         ${store.get(KEY) ? btn(L('Continuar', 'Continue'), 'cont', '', 'g big') : ''}
         ${btn(L('Novo jogo', 'New game'), 'new', '', 'y big')}
