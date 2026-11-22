@@ -7,7 +7,7 @@ ready to merge. You merge by hand. Why it works this way: [`agent-pipeline-desig
 you: label agent:plan
   └─ Planner (Opus, issue-planner) ──► questions in the issue ──► you reply in a comment ──┐
                                    └─► plan in the issue (plan:ready) ◄──────────────────────┘
-you: label plan:approved
+small change: development starts by itself  │  big change (or plan:manual): you add label plan:approved
   └─ Developer (Sonnet, implement-plan) ──► draft PR
        └─ Reviewer (Opus, plan-review + code-review) ──► changes? back to Developer (max 3 reviews)
             └─ CI green ──► PR marked ready, label ready-for-human ──► you review and merge
@@ -93,7 +93,8 @@ run and the develop run) and tune `AGENTS_MAX_USAGE` if you want.
 | --- | --- |
 | Start an issue | Add label **`agent:plan`** |
 | Answer the planner's questions | **Comment in the same issue**, by number: `1 sim, 2 usar 3 substituições, 3 sim`. Just `sim` accepts every recommendation. |
-| Approve the plan | Add label **`plan:approved`** |
+| Approve the plan | Only for **big** changes: add label **`plan:approved`**. **Small** changes start development by themselves (the plan comment says "🚀 Mudança pequena"); you review the PR. |
+| Always approve plans for one issue | Add label **`plan:manual`** together with `agent:plan` |
 | Ask for plan changes | Comment in the issue with what to change (while it is `plan:ready`) |
 | Ask the agent to change the PR | On the agent's PR: **Files changed** → leave your comments → **Review changes** → **Request changes** → **Submit review**. Sonnet fixes them, Opus re-reviews, CI runs, and the issue goes back to `ready-for-human`. Plain comments (without "Request changes") do **not** start an agent. |
 | Merge | When the issue gets **`ready-for-human`**, review the PR and merge it yourself |
@@ -110,7 +111,8 @@ Only comments from you (or collaborators with write access) are read. Comments f
 | `agent:plan` | you | start planning |
 | `plan:questions` | pipeline | planner is waiting for your answers |
 | `plan:ready` | pipeline | plan posted; approve or comment |
-| `plan:approved` | you | start development |
+| `plan:manual` | you (optional) | require plan approval even if the change is small |
+| `plan:approved` | you, or the pipeline for small changes | start development |
 | `agent:dev` / `agent:review` | pipeline | developer / reviewer working |
 | `ready-for-human` | pipeline | PR ready for your review and merge |
 | `needs-human` | pipeline | stopped: review loop exhausted, CI failed, or something unexpected (see comment) |

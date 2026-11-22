@@ -38,6 +38,11 @@ reviews and merges by hand. Agents never merge.
 | 24 | Keep usage for chat | Before each stage (plan, each review, each fix), read 5-hour and weekly usage; pause at ≥ `AGENTS_MAX_USAGE` (default 80%, adjustable). If the usage cannot be read, pause (fail-safe). |
 | 25 | Fallback if 24 does not work | Both: the manual switch, and night mode (`AGENTS_NIGHT_ONLY`, 01:00–06:00 São Paulo). |
 | 26 | Owner feedback on the PR | A GitHub review with **Request changes** from the owner on an `agent/issue-*` PR sends it back: Sonnet addresses the owner's comments (they override the plan), Opus re-reviews (checking each request), CI runs, `ready-for-human` again. Plain comments do not trigger agents. Same usage check, queue and round limit. Added after the first real run (issue #24). |
+| 27 | Who sizes the change | The planner classifies each plan `small` or `big` (`OUT/size.txt`, and a *Tamanho* line in the plan). Small → plan posted for the record and development starts without approval; big → waits for `plan:approved`. |
+| 28 | What is small | All of: ≤ 2 code files (tests/docs excluded); no game rule/balance change; no save-format change; no removal/redesign of features or screens; no risky assumption. Anything else, or any doubt, is big. |
+| 29 | Small after Q&A | Still starts automatically: the owner's answers are the human input. |
+| 30 | Forcing approval | Optional `plan:manual` label on the issue: always wait for `plan:approved`. |
+| 31 | Plan file footer | The approval footer of the plan comment is no longer copied into `docs/plans/issue-<N>.md`. |
 
 ## Skills used
 

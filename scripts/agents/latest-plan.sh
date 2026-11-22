@@ -3,4 +3,4 @@
 set -euo pipefail
 gh issue view "$1" --json comments --jq '
   [.comments[] | select(.author.login == "github-actions" and (.body | contains("<!-- agent-plan -->")))]
-  | last | .body // empty' | sed '/<!-- agent-plan -->/d'
+  | last | .body // empty' | sed '/<!-- \/agent-plan -->/,$d' | sed '/<!-- agent-plan -->/d'

@@ -18,6 +18,7 @@ on:
 permissions:
   contents: read
   issues: write
+  actions: write # mudança pequena: inicia o agent-develop.yml sem esperar aprovação
 
 concurrency:
   group: agent-plan-${{ github.event.issue.number || inputs.issue }}
@@ -75,25 +76,7 @@ jobs:
 
       - name: Publish questions or plan
         if: steps.gate.outputs.proceed == 'true'
-        run: |
-          source scripts/agents/lib.sh
-          out="$RUNNER_TEMP/agent-out"
-          if [ "${{ steps.claude.outcome }}" != success ]; then
-            pause "$ISSUE" "O agente de planejamento falhou ou atingiu o limite de uso do plano. Veja o log: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          elif [ -s "$out/questions.md" ]; then
-            gh issue comment "$ISSUE" --body-file "$out/questions.md" >/dev/null
-            set_state "$ISSUE" plan:questions
-          elif [ -s "$out/plan.md" ]; then
-            { echo '<!-- agent-plan -->'; cat "$out/plan.md"; echo
-              echo '---'
-              echo '✅ Para aprovar, adicione o rótulo **`plan:approved`**. Para pedir mudanças, comente nesta issue.'
-            } > "$RUNNER_TEMP/plan-comment.md"
-            gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/plan-comment.md" >/dev/null
-            set_state "$ISSUE" plan:ready
-          else
-            set_state "$ISSUE" needs-human
-            comment "$ISSUE" "⚠️ O agente de planejamento terminou sem perguntas nem plano. Log: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          fi
+        run: bash scripts/agents/publish-plan.sh "$ISSUE" "$RUNNER_TEMP/agent-out" "${{ steps.claude.outcome }}"
 
       - name: Release
         if: always() && steps.gate.outputs.proceed == 'true'

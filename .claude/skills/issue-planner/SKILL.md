@@ -50,13 +50,32 @@ Write everything (questions and plan) in the language the issue is written in.
    Ask the whole frontier at once (every question whose prerequisites are settled), word each so "yes" accepts the
    recommendation, and keep it short: usually 1–5 questions. If the owner already answered something, do not ask it
    again. If the latest owner comment answers all your questions, move on to the plan.
-5. **Otherwise**, write `OUT/plan.md` and stop. If there is a previous plan and the owner asked for changes, revise
+5. **Otherwise**, write `OUT/plan.md` and `OUT/size.txt`, and stop. If there is a previous plan and the owner asked for changes, revise
    it and say at the top what changed.
+
+## Size (`OUT/size.txt`)
+
+Classify the plan. A **small** change skips the owner's plan approval and goes straight to development (the owner
+still reviews the PR); a **big** change waits for the owner to approve the plan. Write exactly one word to
+`OUT/size.txt`: `small` or `big`.
+
+It is `small` only if **all** of these hold:
+1. It touches at most **2 code files** (tests and docs do not count).
+2. It does not change **game rules or balance**: strengths, money, probabilities, the match engine's behaviour.
+3. It does not change the **save-game format** (the shape of the state stored in `localStorage`).
+4. It does not remove or redesign existing features or screens.
+5. None of your *Assumptions* is risky (something the owner could reasonably disagree with in a way that matters).
+
+Anything else is `big`. **When in doubt, `big`.** Questions answered earlier in the thread do not make a change big
+by themselves: classify the change as it now stands.
 
 ## Plan format (`OUT/plan.md`)
 
 ```
 # Plano: <issue title> (#<number>)
+
+## Tamanho
+<small | big> — <one line: why, citing the rules above>
 
 ## Objetivo
 <one paragraph: the outcome, from the player's point of view where relevant>
@@ -90,5 +109,6 @@ behaviour, no "investigate X". Keep it as small as the issue allows.
 
 ## Rules
 
-- Write exactly one of `OUT/questions.md` or `OUT/plan.md`. Never both, never neither.
+- Write exactly one of `OUT/questions.md` or `OUT/plan.md`. Never both, never neither. With a plan, also write
+  `OUT/size.txt`.
 - Do not edit any repository file. Do not run git commands that change anything.
