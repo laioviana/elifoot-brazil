@@ -165,6 +165,15 @@
   E.table = (G, div) => G.teams.filter(t => t.div === div).sort((a, b) =>
     b.st.pts - a.st.pts || b.st.w - a.st.w || (b.st.gf - b.st.ga) - (a.st.gf - a.st.ga) || b.st.gf - a.st.gf || a.id - b.id);
   E.position = (G, tid) => E.table(G, G.teams[tid].div).findIndex(t => t.id === tid) + 1;
+  // Próximo jogo do usuário: { home, opp, pos } (pos = posição atual do adversário) ou null se a temporada acabou
+  E.nextMatch = G => {
+    const id = G.mgr.team, rd = G.fix[G.teams[id].div][G.round];
+    if (!rd) return null;
+    const f = rd.find(x => x[0] === id || x[1] === id);
+    if (!f) return null;
+    const home = f[0] === id, opp = G.teams[home ? f[1] : f[0]];
+    return { home, opp, pos: E.position(G, opp.id) };
+  };
   E.expectedPos = (G, tid) => {
     const t = G.teams[tid];
     return G.teams.filter(x => x.div === t.div).sort((a, b) => E.rating(b) - E.rating(a)).indexOf(t) + 1;

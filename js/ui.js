@@ -122,10 +122,6 @@
   }
 
   /* ---------- hub ---------- */
-  function nextFix(G) {
-    const id = G.mgr.team, rd = G.fix[G.teams[id].div][G.round];
-    return rd ? rd.find(f => f[0] === id || f[1] === id) : null;
-  }
   function hud() {
     const G = S.G, U = E.userTeam(G);
     return `<div class="box hud">${shirt(U, 36)}<div class="grow"><div class="name">${U.name}</div>
@@ -135,10 +131,10 @@
   const TABS = [['squad', 'Elenco', 'Squad'], ['table', 'Tabela', 'Table'], ['fix', 'Jogos', 'Fixtures'], ['market', 'Mercado', 'Market'],
     ['fin', 'Finanças', 'Finance'], ['news', 'Notícias', 'News'], ['mgr', 'Técnico', 'Manager']];
   function hub() {
-    const G = S.G, U = E.userTeam(G), fx = nextFix(G);
+    const G = S.G, U = E.userTeam(G), m = E.nextMatch(G);
     const body = { squad: tabSquad, table: tabTable, fix: tabFix, market: tabMarket, fin: tabFin, news: tabNews, mgr: tabMgr }[S.tab]();
     let nx = '';
-    if (fx) { const home = fx[0] === U.id, o = G.teams[home ? fx[1] : fx[0]]; nx = `<span class="nx">${home ? L('CASA', 'HOME') : L('FORA', 'AWAY')} × ${o.name}</span>`; }
+    if (m) nx = `<span class="nx">${m.home ? L('CASA', 'HOME') : L('FORA', 'AWAY')} × ${m.opp.name} (${m.pos}º)</span>`;
     return hud() + `<nav>${TABS.map(t => btn(L(t[1], t[2]), 'tab', `data-t="${t[0]}"`, S.tab === t[0] ? 'on' : '')).join('')}</nav>${body}
       <div class="playbar">${nx}${btn(L('Jogar ▶', 'Play ▶'), 'play', '', 'g big')}</div>`;
   }
