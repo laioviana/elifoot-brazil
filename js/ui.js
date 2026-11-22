@@ -77,13 +77,13 @@
       <div class="logo">PRANCHETA</div>
       <div class="logo2">Campeonato Brasileiro Série A - D</div>
       <canvas id="tcv" width="64" height="36"></canvas>
+      <p class="dim small blink">▼ PRESS START ▼</p>
       <div class="menu">
         ${store.get(KEY) ? btn(L('Continuar', 'Continue'), 'cont', '', 'g big') : ''}
         ${btn(L('Novo jogo', 'New game'), 'new', '', 'y big')}
         <div class="row">${btn(E.lang === 'pt' ? 'PT &gt; EN' : 'EN &gt; PT', 'lang')}${btn(L('Som: ', 'Sound: ') + (S.mute ? 'OFF' : 'ON'), 'mute')}</div>
       </div>
       <p class="dim small">${L('Comande um clube da Série D até o topo do futebol brasileiro.', 'Take a Série D club to the top of Brazilian football.')}</p>
-      <p class="dim small blink">▼ PRESS START ▼</p>
     </div>`;
   }
   function drawTitle() {
