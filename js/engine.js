@@ -4,6 +4,7 @@
   const D = root.PB_DATA || require('./data.js');
   const ROSTER = root.PB_ROSTER || (typeof require === 'function' ? require('./roster.js') : {});
   const E = { lang: 'pt', rand: Math.random };
+  E.VERSION = root.PB_VERSION || (typeof require === 'function' ? require('./version.js') : '');
   const L = (pt, en) => (E.lang === 'en' ? en : pt);
   const r = () => E.rand();
   const ri = (a, b) => a + Math.floor(r() * (b - a + 1));
