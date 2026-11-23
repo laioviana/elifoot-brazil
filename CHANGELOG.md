@@ -5,6 +5,7 @@ MAJOR = breaks old saves or redesigns the game, MINOR = new feature, PATCH = bug
 Every PR adds a line under `## Unreleased`; the release workflow turns it into a version section on merge.
 
 ## Unreleased
+- Title screen: language and sound buttons stay centred under the main buttons on narrow (mobile) screens.
 - Next-match bar in the hub now shows the opponent's league position.
 - Title screen: the author credit now sits at the very bottom of the page (above the version tag).
 - Game versioning: version shown on the title screen, automatic patch release on every merge, `npm run bump` for minor/major releases.
